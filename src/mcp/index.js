@@ -6,8 +6,12 @@
  * Connects to the running unified-hifi-control bridge via HTTP.
  */
 
-const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
+const { Server } = require('@modelcontextprotocol/sdk/server/index.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
+const {
+  ListToolsRequestSchema,
+  CallToolRequestSchema,
+} = require('@modelcontextprotocol/sdk/types.js');
 
 const BRIDGE_URL = process.env.HIFI_BRIDGE_URL || 'http://localhost:3000';
 
@@ -73,256 +77,156 @@ async function apiFetch(path, options = {}) {
   return res.json();
 }
 
-async function main() {
-  const server = new McpServer({
-    name: 'unified-hifi-control',
-    version: '0.1.0',
-    instructions: SERVER_INSTRUCTIONS,
-  });
+// Tool definitions
+const TOOLS = [
+  {
+    name: 'hifi_zones',
+    description: 'List all available Roon zones for playback control',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'hifi_now_playing',
+    description: 'Get current playback state for a zone (track, artist, album, play state, volume)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        zone_id: { type: 'string', description: 'The zone ID to query (get from hifi_zones)' },
+      },
+      required: ['zone_id'],
+    },
+  },
+  {
+    name: 'hifi_control',
+    description: 'Control playback: play, pause, playpause, next, previous, stop, or adjust volume',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        zone_id: { type: 'string', description: 'The zone ID to control' },
+        action: { type: 'string', description: 'Action: play, pause, playpause, next, previous, stop, volume' },
+        value: { type: 'number', description: 'For volume action: absolute level (0-100) or relative change (-10, +5, etc)' },
+      },
+      required: ['zone_id', 'action'],
+    },
+  },
+  {
+    name: 'hifi_hqplayer_status',
+    description: 'Get HQPlayer Embedded status and current pipeline settings',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'hifi_hqplayer_profiles',
+    description: 'List available HQPlayer Embedded configuration profiles',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'hifi_hqplayer_load_profile',
+    description: 'Load an HQPlayer Embedded configuration profile (will restart HQPlayer)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        profile: { type: 'string', description: 'Profile name to load (get from hifi_hqplayer_profiles)' },
+      },
+      required: ['profile'],
+    },
+  },
+  {
+    name: 'hifi_hqplayer_set_pipeline',
+    description: 'Change an HQPlayer pipeline setting (filter, shaper, dither, etc)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        setting: { type: 'string', description: 'Setting to change: mode, samplerate, filter1x, filterNx, shaper, dither' },
+        value: { type: 'string', description: 'New value for the setting' },
+      },
+      required: ['setting', 'value'],
+    },
+  },
+  {
+    name: 'hifi_status',
+    description: 'Get overall bridge status (Roon connection, HQPlayer config)',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+];
 
-  // Tool: Get available zones
-  server.tool(
-    'hifi_zones',
-    'List all available Roon zones for playback control',
-    {},
-    async () => {
-      try {
+// Tool handlers
+async function handleTool(name, args) {
+  try {
+    switch (name) {
+      case 'hifi_zones': {
         const data = await apiFetch('/zones');
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify(data.zones, null, 2),
-          }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: 'text', text: `Error: ${err.message}` }],
-          isError: true,
-        };
+        return { content: [{ type: 'text', text: JSON.stringify(data.zones, null, 2) }] };
       }
-    }
-  );
 
-  // Tool: Get now playing info
-  server.tool(
-    'hifi_now_playing',
-    'Get current playback state for a zone (track, artist, album, play state, volume)',
-    {
-      zone_id: {
-        type: 'string',
-        description: 'The zone ID to query (get from hifi_zones)',
-        required: true,
-      },
-    },
-    async ({ zone_id }) => {
-      try {
+      case 'hifi_now_playing': {
+        const { zone_id } = args;
         const data = await apiFetch(`/now_playing?zone_id=${encodeURIComponent(zone_id)}`);
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify(data, null, 2),
-          }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: 'text', text: `Error: ${err.message}` }],
-          isError: true,
-        };
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
       }
-    }
-  );
 
-  // Tool: Control playback
-  server.tool(
-    'hifi_control',
-    'Control playback: play, pause, playpause, next, previous, stop, or adjust volume',
-    {
-      zone_id: {
-        type: 'string',
-        description: 'The zone ID to control',
-        required: true,
-      },
-      action: {
-        type: 'string',
-        description: 'Action: play, pause, playpause, next, previous, stop, volume',
-        required: true,
-      },
-      value: {
-        type: 'number',
-        description: 'For volume action: absolute level (0-100) or relative change (-10, +5, etc)',
-        required: false,
-      },
-    },
-    async ({ zone_id, action, value }) => {
-      try {
+      case 'hifi_control': {
+        const { zone_id, action, value } = args;
         const body = { zone_id, action };
         if (value !== undefined) body.value = value;
-
-        await apiFetch('/control', {
-          method: 'POST',
-          body: JSON.stringify(body),
-        });
-
-        // Return updated state
+        await apiFetch('/control', { method: 'POST', body: JSON.stringify(body) });
         const data = await apiFetch(`/now_playing?zone_id=${encodeURIComponent(zone_id)}`);
-        return {
-          content: [{
-            type: 'text',
-            text: `Action "${action}" executed.\n\nCurrent state:\n${JSON.stringify(data, null, 2)}`,
-          }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: 'text', text: `Error: ${err.message}` }],
-          isError: true,
-        };
+        return { content: [{ type: 'text', text: `Action "${action}" executed.\n\nCurrent state:\n${JSON.stringify(data, null, 2)}` }] };
       }
-    }
-  );
 
-  // Tool: Get HQPlayer status
-  server.tool(
-    'hifi_hqplayer_status',
-    'Get HQPlayer Embedded status and current pipeline settings',
-    {},
-    async () => {
-      try {
+      case 'hifi_hqplayer_status': {
         const [status, pipeline] = await Promise.all([
           apiFetch('/hqp/status'),
           apiFetch('/hqp/pipeline').catch(() => ({ enabled: false })),
         ]);
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({ status, pipeline }, null, 2),
-          }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: 'text', text: `Error: ${err.message}` }],
-          isError: true,
-        };
+        return { content: [{ type: 'text', text: JSON.stringify({ status, pipeline }, null, 2) }] };
       }
-    }
-  );
 
-  // Tool: List HQPlayer profiles
-  server.tool(
-    'hifi_hqplayer_profiles',
-    'List available HQPlayer Embedded configuration profiles',
-    {},
-    async () => {
-      try {
+      case 'hifi_hqplayer_profiles': {
         const data = await apiFetch('/hqp/profiles');
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify(data, null, 2),
-          }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: 'text', text: `Error: ${err.message}` }],
-          isError: true,
-        };
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
       }
-    }
-  );
 
-  // Tool: Load HQPlayer profile
-  server.tool(
-    'hifi_hqplayer_load_profile',
-    'Load an HQPlayer Embedded configuration profile (will restart HQPlayer)',
-    {
-      profile: {
-        type: 'string',
-        description: 'Profile name to load (get from hifi_hqplayer_profiles)',
-        required: true,
-      },
-    },
-    async ({ profile }) => {
-      try {
-        await apiFetch('/hqp/profiles/load', {
-          method: 'POST',
-          body: JSON.stringify({ profile }),
-        });
-        return {
-          content: [{
-            type: 'text',
-            text: `Profile "${profile}" loading. HQPlayer will restart.`,
-          }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: 'text', text: `Error: ${err.message}` }],
-          isError: true,
-        };
+      case 'hifi_hqplayer_load_profile': {
+        const { profile } = args;
+        await apiFetch('/hqp/profiles/load', { method: 'POST', body: JSON.stringify({ profile }) });
+        return { content: [{ type: 'text', text: `Profile "${profile}" loading. HQPlayer will restart.` }] };
       }
-    }
-  );
 
-  // Tool: Set HQPlayer pipeline setting
-  server.tool(
-    'hifi_hqplayer_set_pipeline',
-    'Change an HQPlayer pipeline setting (filter, shaper, dither, etc)',
-    {
-      setting: {
-        type: 'string',
-        description: 'Setting to change: mode, samplerate, filter1x, filterNx, shaper, dither',
-        required: true,
-      },
-      value: {
-        type: 'string',
-        description: 'New value for the setting',
-        required: true,
-      },
-    },
-    async ({ setting, value }) => {
-      try {
-        await apiFetch('/hqp/pipeline', {
-          method: 'POST',
-          body: JSON.stringify({ setting, value }),
-        });
-
-        // Return updated pipeline
+      case 'hifi_hqplayer_set_pipeline': {
+        const { setting, value } = args;
+        await apiFetch('/hqp/pipeline', { method: 'POST', body: JSON.stringify({ setting, value }) });
         const pipeline = await apiFetch('/hqp/pipeline');
-        return {
-          content: [{
-            type: 'text',
-            text: `Setting "${setting}" updated to "${value}".\n\nCurrent pipeline:\n${JSON.stringify(pipeline, null, 2)}`,
-          }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: 'text', text: `Error: ${err.message}` }],
-          isError: true,
-        };
+        return { content: [{ type: 'text', text: `Setting "${setting}" updated to "${value}".\n\nCurrent pipeline:\n${JSON.stringify(pipeline, null, 2)}` }] };
       }
+
+      case 'hifi_status': {
+        const data = await apiFetch('/api/status');
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+
+      default:
+        return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
     }
+  } catch (err) {
+    return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
+  }
+}
+
+async function main() {
+  const server = new Server(
+    { name: 'unified-hifi-control', version: '0.1.0' },
+    { capabilities: { tools: {} }, instructions: SERVER_INSTRUCTIONS }
   );
 
-  // Tool: Get bridge status
-  server.tool(
-    'hifi_status',
-    'Get overall bridge status (Roon connection, HQPlayer config)',
-    {},
-    async () => {
-      try {
-        const data = await apiFetch('/api/status');
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify(data, null, 2),
-          }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: 'text', text: `Error: ${err.message}` }],
-          isError: true,
-        };
-      }
-    }
-  );
+  // List available tools
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    return { tools: TOOLS };
+  });
+
+  // Handle tool calls
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+    return handleTool(name, args || {});
+  });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

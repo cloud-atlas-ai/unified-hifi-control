@@ -12,9 +12,26 @@ const log = createLogger('Main');
 
 log.info('Starting Unified Hi-Fi Control');
 
+// Get local IP for base URL
+function getLocalIp() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
+
+const localIp = getLocalIp();
+const baseUrl = `http://${localIp}:${PORT}`;
+
 // Create Roon client
 const roon = createRoonClient({
   logger: createLogger('Roon'),
+  base_url: baseUrl,
 });
 
 // Create HQPlayer client (unconfigured initially, configured via API or env vars)
@@ -56,19 +73,6 @@ const app = createApp({
 roon.start();
 mqttService.connect();
 
-// Get local IP for mDNS advertisement
-function getLocalIp() {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
-  return 'localhost';
-}
-
 let mdnsService;
 
 app.listen(PORT, () => {
@@ -76,7 +80,6 @@ app.listen(PORT, () => {
   log.info('Waiting for Roon Core authorization...');
 
   // Advertise via mDNS for knob discovery
-  const localIp = getLocalIp();
   mdnsService = advertise(PORT, {
     name: 'Unified Hi-Fi Control',
     base: `http://${localIp}:${PORT}`,
