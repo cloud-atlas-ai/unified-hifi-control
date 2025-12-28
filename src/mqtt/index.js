@@ -30,12 +30,14 @@ function createMqttService({ hqp, logger } = {}) {
 
     if (process.env.MQTT_USER) {
       options.username = process.env.MQTT_USER;
-      options.password = process.env.MQTT_PASS || '';
+      options.password = process.env.MQTT_PASSWORD || process.env.MQTT_PASS || '';
     }
 
-    log.info('Connecting to MQTT broker', { broker, topicPrefix });
+    // Add protocol if missing
+    const brokerUrl = broker.includes('://') ? broker : `mqtt://${broker}`;
+    log.info('Connecting to MQTT broker', { broker: brokerUrl, topicPrefix });
 
-    client = mqtt.connect(broker, options);
+    client = mqtt.connect(brokerUrl, options);
 
     client.on('connect', async () => {
       log.info('MQTT connected');
