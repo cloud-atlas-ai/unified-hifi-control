@@ -1,5 +1,6 @@
 const { createRoonClient } = require('./roon/client');
 const { HQPClient } = require('./hqplayer/client');
+const { createMqttService } = require('./mqtt');
 const { createApp } = require('./server/app');
 const { createLogger } = require('./lib/logger');
 
@@ -29,6 +30,12 @@ if (process.env.HQP_HOST) {
   log.info('HQPlayer pre-configured from environment', { host: process.env.HQP_HOST });
 }
 
+// Create MQTT service (opt-in via MQTT_BROKER env var)
+const mqttService = createMqttService({
+  hqp,
+  logger: createLogger('MQTT'),
+});
+
 // Create HTTP server
 const app = createApp({
   roon,
@@ -38,6 +45,7 @@ const app = createApp({
 
 // Start services
 roon.start();
+mqttService.connect();
 
 app.listen(PORT, () => {
   log.info(`HTTP server listening on port ${PORT}`);
@@ -47,6 +55,7 @@ app.listen(PORT, () => {
 // Graceful shutdown
 process.on('SIGTERM', () => {
   log.info('Shutting down...');
+  mqttService.disconnect();
   process.exit(0);
 });
 
