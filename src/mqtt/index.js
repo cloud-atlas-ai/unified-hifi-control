@@ -37,13 +37,17 @@ function createMqttService({ hqp, logger } = {}) {
 
     client = mqtt.connect(broker, options);
 
-    client.on('connect', () => {
+    client.on('connect', async () => {
       log.info('MQTT connected');
 
       // Subscribe to command topics
       const commandTopics = [
         `${topicPrefix}/command/hqplayer/load`,
         `${topicPrefix}/command/hqplayer/pipeline`,
+        `${topicPrefix}/hqplayer/filter1x/set`,
+        `${topicPrefix}/hqplayer/shaper/set`,
+        `${topicPrefix}/hqplayer/samplerate/set`,
+        `${topicPrefix}/hqplayer/profile/set`,
       ];
 
       commandTopics.forEach(topic => {
@@ -59,8 +63,8 @@ function createMqttService({ hqp, logger } = {}) {
       // Start publishing state
       startPublishing();
 
-      // Publish discovery config for Home Assistant
-      publishHADiscovery();
+      // Publish discovery config for Home Assistant (includes selects with options)
+      await publishHADiscovery();
     });
 
     client.on('error', (err) => {
@@ -83,25 +87,19 @@ function createMqttService({ hqp, logger } = {}) {
   async function handleMessage(topic, payload) {
     log.debug('MQTT message received', { topic, payload });
 
+    if (!hqp.isConfigured()) {
+      log.warn('HQPlayer not configured, ignoring command');
+      return;
+    }
+
     if (topic === `${topicPrefix}/command/hqplayer/load`) {
-      // Load a profile
-      if (!hqp.isConfigured()) {
-        log.warn('HQPlayer not configured, ignoring load command');
-        return;
-      }
       const profile = payload.trim();
       if (profile) {
         log.info('Loading HQPlayer profile via MQTT', { profile });
         await hqp.loadProfile(profile);
-        // Publish updated state after a delay (HQP restarts)
         setTimeout(() => publishHqpState(), 10000);
       }
     } else if (topic === `${topicPrefix}/command/hqplayer/pipeline`) {
-      // Set pipeline setting: { "setting": "filter1x", "value": "poly-sinc-gauss-xl" }
-      if (!hqp.isConfigured()) {
-        log.warn('HQPlayer not configured, ignoring pipeline command');
-        return;
-      }
       try {
         const { setting, value } = JSON.parse(payload);
         if (setting && value !== undefined) {
@@ -112,6 +110,33 @@ function createMqttService({ hqp, logger } = {}) {
       } catch (e) {
         log.warn('Invalid pipeline command payload', { payload, error: e.message });
       }
+    } else if (topic === `${topicPrefix}/hqplayer/filter1x/set`) {
+      // Map label back to value
+      const pipeline = await hqp.fetchPipeline();
+      const opt = pipeline.settings?.filter1x?.options?.find(o => o.label === payload);
+      const value = opt?.value || payload;
+      log.info('Setting HQPlayer filter via MQTT select', { label: payload, value });
+      await hqp.setPipelineSetting('filter1x', value);
+      setTimeout(() => publishHqpState(), 1000);
+    } else if (topic === `${topicPrefix}/hqplayer/shaper/set`) {
+      const pipeline = await hqp.fetchPipeline();
+      const opt = pipeline.settings?.shaper?.options?.find(o => o.label === payload);
+      const value = opt?.value || payload;
+      log.info('Setting HQPlayer shaper via MQTT select', { label: payload, value });
+      await hqp.setPipelineSetting('shaper', value);
+      setTimeout(() => publishHqpState(), 1000);
+    } else if (topic === `${topicPrefix}/hqplayer/samplerate/set`) {
+      const pipeline = await hqp.fetchPipeline();
+      const opt = pipeline.settings?.samplerate?.options?.find(o => o.label === payload);
+      const value = opt?.value || payload;
+      log.info('Setting HQPlayer samplerate via MQTT select', { label: payload, value });
+      await hqp.setPipelineSetting('samplerate', value);
+      setTimeout(() => publishHqpState(), 1000);
+    } else if (topic === `${topicPrefix}/hqplayer/profile/set`) {
+      log.info('Loading HQPlayer profile via MQTT select', { profile: payload });
+      await hqp.loadProfile(payload);
+      // HQPlayer restarts when loading profile - wait longer
+      setTimeout(() => publishHqpState(), 10000);
     }
   }
 
@@ -142,11 +167,46 @@ function createMqttService({ hqp, logger } = {}) {
         { retain: true }
       );
 
-      // If connected, publish detailed pipeline
+      // If connected, publish detailed pipeline and update select states
       if (status.connected && status.pipeline) {
         client.publish(
           `${topicPrefix}/hqplayer/pipeline`,
           JSON.stringify(status.pipeline),
+          { retain: true }
+        );
+
+        // Keep select entity states in sync with actual HQPlayer state
+        const settings = status.pipeline.settings || {};
+        if (settings.filter1x?.selected?.label) {
+          client.publish(
+            `${topicPrefix}/hqplayer/filter1x/state`,
+            settings.filter1x.selected.label,
+            { retain: true }
+          );
+        }
+        if (settings.shaper?.selected?.label) {
+          client.publish(
+            `${topicPrefix}/hqplayer/shaper/state`,
+            settings.shaper.selected.label,
+            { retain: true }
+          );
+        }
+        if (settings.samplerate?.selected?.label) {
+          client.publish(
+            `${topicPrefix}/hqplayer/samplerate/state`,
+            settings.samplerate.selected.label,
+            { retain: true }
+          );
+        }
+      }
+
+      // Sync profile state using configName as best available proxy
+      // HQPlayer doesn't expose "active profile" directly, but configName
+      // typically reflects the loaded profile after a profile switch
+      if (status.configName) {
+        client.publish(
+          `${topicPrefix}/hqplayer/profile/state`,
+          status.configName,
           { retain: true }
         );
       }
@@ -166,8 +226,25 @@ function createMqttService({ hqp, logger } = {}) {
     }
   }
 
-  function publishHADiscovery() {
+  async function publishHADiscovery() {
     if (!client || !client.connected) return;
+
+    // Fetch pipeline and profiles to get available options for selects
+    let pipelineSettings = {};
+    let profiles = [];
+    if (hqp.isConfigured()) {
+      try {
+        const pipeline = await hqp.fetchPipeline();
+        pipelineSettings = pipeline.settings || {};
+      } catch (err) {
+        log.warn('Failed to fetch pipeline for discovery', { error: err.message });
+      }
+      try {
+        profiles = await hqp.fetchProfiles();
+      } catch (err) {
+        log.warn('Failed to fetch profiles for discovery', { error: err.message });
+      }
+    }
 
     // HQPlayer config name sensor
     const configSensor = {
@@ -200,6 +277,24 @@ function createMqttService({ hqp, logger } = {}) {
     client.publish(
       'homeassistant/sensor/unified_hifi_hqp_state/config',
       JSON.stringify(stateSensor),
+      { retain: true }
+    );
+
+    // HQPlayer volume sensor
+    const volumeSensor = {
+      name: 'HQPlayer Volume',
+      unique_id: 'unified_hifi_hqp_volume',
+      state_topic: `${topicPrefix}/hqplayer/status`,
+      value_template: '{{ value_json.pipeline.volume.value | default(0) }}',
+      unit_of_measurement: 'dB',
+      availability_topic: `${topicPrefix}/hqplayer/status`,
+      availability_template: '{{ "online" if value_json.connected else "offline" }}',
+      icon: 'mdi:volume-high',
+    };
+
+    client.publish(
+      'homeassistant/sensor/unified_hifi_hqp_volume/config',
+      JSON.stringify(volumeSensor),
       { retain: true }
     );
 
@@ -253,6 +348,104 @@ function createMqttService({ hqp, logger } = {}) {
       JSON.stringify(ditherSensor),
       { retain: true }
     );
+
+    // Select entities for control (only if we have options)
+    if (pipelineSettings.filter1x && pipelineSettings.filter1x.options.length > 0) {
+      const filterSelect = {
+        name: 'HQPlayer Filter Select',
+        unique_id: 'unified_hifi_hqp_filter_select',
+        state_topic: `${topicPrefix}/hqplayer/filter1x/state`,
+        command_topic: `${topicPrefix}/hqplayer/filter1x/set`,
+        options: pipelineSettings.filter1x.options.map(o => o.label),
+        availability_topic: `${topicPrefix}/hqplayer/status`,
+        availability_template: '{{ "online" if value_json.connected else "offline" }}',
+        icon: 'mdi:tune',
+      };
+      client.publish(
+        'homeassistant/select/unified_hifi_hqp_filter/config',
+        JSON.stringify(filterSelect),
+        { retain: true }
+      );
+
+      // Publish current state (use label to match options)
+      client.publish(
+        `${topicPrefix}/hqplayer/filter1x/state`,
+        pipelineSettings.filter1x.selected?.label || '',
+        { retain: true }
+      );
+    }
+
+    if (pipelineSettings.shaper && pipelineSettings.shaper.options.length > 0) {
+      const shaperSelect = {
+        name: 'HQPlayer Shaper Select',
+        unique_id: 'unified_hifi_hqp_shaper_select',
+        state_topic: `${topicPrefix}/hqplayer/shaper/state`,
+        command_topic: `${topicPrefix}/hqplayer/shaper/set`,
+        options: pipelineSettings.shaper.options.map(o => o.label),
+        availability_topic: `${topicPrefix}/hqplayer/status`,
+        availability_template: '{{ "online" if value_json.connected else "offline" }}',
+        icon: 'mdi:wave',
+      };
+      client.publish(
+        'homeassistant/select/unified_hifi_hqp_shaper/config',
+        JSON.stringify(shaperSelect),
+        { retain: true }
+      );
+
+      client.publish(
+        `${topicPrefix}/hqplayer/shaper/state`,
+        pipelineSettings.shaper.selected?.label || '',
+        { retain: true }
+      );
+    }
+
+    if (pipelineSettings.samplerate && pipelineSettings.samplerate.options.length > 0) {
+      const samplerateSelect = {
+        name: 'HQPlayer Sample Rate Select',
+        unique_id: 'unified_hifi_hqp_samplerate_select',
+        state_topic: `${topicPrefix}/hqplayer/samplerate/state`,
+        command_topic: `${topicPrefix}/hqplayer/samplerate/set`,
+        options: pipelineSettings.samplerate.options.map(o => o.label),
+        availability_topic: `${topicPrefix}/hqplayer/status`,
+        availability_template: '{{ "online" if value_json.connected else "offline" }}',
+        icon: 'mdi:waveform',
+      };
+      client.publish(
+        'homeassistant/select/unified_hifi_hqp_samplerate/config',
+        JSON.stringify(samplerateSelect),
+        { retain: true }
+      );
+
+      client.publish(
+        `${topicPrefix}/hqplayer/samplerate/state`,
+        pipelineSettings.samplerate.selected?.label || '',
+        { retain: true }
+      );
+    }
+
+    // Profile select - uses configName as the active profile indicator
+    // HQPlayer doesn't explicitly expose "active profile" but configName
+    // typically matches the loaded profile name after a profile load.
+    // Recommendation: Set your HQPlayer config title to match your profile name
+    // for accurate state sync in Home Assistant.
+    if (profiles.length > 0) {
+      const profileSelect = {
+        name: 'HQPlayer Profile',
+        unique_id: 'unified_hifi_hqp_profile_select',
+        state_topic: `${topicPrefix}/hqplayer/profile/state`,
+        command_topic: `${topicPrefix}/hqplayer/profile/set`,
+        options: profiles.map(p => p.value),
+        availability_topic: `${topicPrefix}/hqplayer/status`,
+        availability_template: '{{ "online" if value_json.connected else "offline" }}',
+        icon: 'mdi:playlist-music',
+      };
+      client.publish(
+        'homeassistant/select/unified_hifi_hqp_profile/config',
+        JSON.stringify(profileSelect),
+        { retain: true }
+      );
+      // State is synced by publishHqpState() using configName
+    }
 
     log.info('Published Home Assistant MQTT discovery configs');
   }
