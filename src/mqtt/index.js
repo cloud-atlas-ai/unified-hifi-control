@@ -237,6 +237,23 @@ function createMqttService({ hqp, logger } = {}) {
       { retain: true }
     );
 
+    // HQPlayer dither sensor
+    const ditherSensor = {
+      name: 'HQPlayer Dither',
+      unique_id: 'unified_hifi_hqp_dither',
+      state_topic: `${topicPrefix}/hqplayer/status`,
+      value_template: '{{ value_json.pipeline.settings.dither.selected.label | default("Unknown", true) }}',
+      availability_topic: `${topicPrefix}/hqplayer/status`,
+      availability_template: '{{ "online" if value_json.connected else "offline" }}',
+      icon: 'mdi:sine-wave',
+    };
+
+    client.publish(
+      'homeassistant/sensor/unified_hifi_hqp_dither/config',
+      JSON.stringify(ditherSensor),
+      { retain: true }
+    );
+
     log.info('Published Home Assistant MQTT discovery configs');
   }
 

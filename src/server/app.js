@@ -140,7 +140,7 @@ function createApp(opts = {}) {
     if (!setting || value === undefined) {
       return res.status(400).json({ error: 'setting and value required' });
     }
-    const validSettings = ['mode', 'samplerate', 'filter1x', 'filterNx', 'shaper'];
+    const validSettings = ['mode', 'samplerate', 'filter1x', 'filterNx', 'shaper', 'dither'];
     if (!validSettings.includes(setting)) {
       return res.status(400).json({ error: `Invalid setting. Valid: ${validSettings.join(', ')}` });
     }

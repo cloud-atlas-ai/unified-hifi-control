@@ -369,6 +369,7 @@ class HQPClient {
         filter1x: this.parseSelectOptions(html, 'filter1x'),
         filterNx: this.parseSelectOptions(html, 'filterNx'),
         shaper: this.parseSelectOptions(html, 'shaper'),
+        dither: this.parseSelectOptions(html, 'dither'),
         samplerate: this.parseSelectOptions(html, 'samplerate'),
       },
     };
@@ -384,6 +385,7 @@ class HQPClient {
       filter1x: settings.filter1x?.selected?.value || '0',
       filterNx: settings.filterNx?.selected?.value || '0',
       shaper: settings.shaper?.selected?.value || '0',
+      dither: settings.dither?.selected?.value || '0',
     };
 
     formData[name] = value;
