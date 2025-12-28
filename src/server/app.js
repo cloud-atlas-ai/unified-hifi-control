@@ -31,7 +31,8 @@ function createApp(opts = {}) {
   });
 
   app.get('/roon/zones', (req, res) => {
-    res.json(roon.getZones());
+    const debug = req.query.debug === 'true';
+    res.json(roon.getZones({ debug }));
   });
 
   app.get('/roon/now_playing', (req, res) => {

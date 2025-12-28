@@ -197,11 +197,26 @@ function createRoonClient(opts = {}) {
     }
   }
 
-  function getZones() {
-    return state.zones.map((zone) => ({
-      zone_id: zone.zone_id,
-      zone_name: zone.display_name,
-    }));
+  function getZones(opts = {}) {
+    return state.zones.map((zone) => {
+      const output = zone.outputs?.[0];
+      const sourceControl = output?.source_controls?.[0];
+      const canGroup = output?.can_group_with_output_ids || [];
+      const result = {
+        zone_id: zone.zone_id,
+        zone_name: zone.display_name,
+        source: 'roon',
+        state: zone.state || 'stopped',
+        output_count: zone.outputs?.length || 0,
+        output_name: output?.display_name || null,
+        device_name: sourceControl?.display_name || null,
+        supports_grouping: canGroup.length > 1,
+      };
+      if (opts.debug) {
+        result._raw_output = output || null;
+      }
+      return result;
+    });
   }
 
   function getNowPlaying(zone_id) {
