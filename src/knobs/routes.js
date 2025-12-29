@@ -371,7 +371,6 @@ async function loadZones() {
       const isHqp = (zone.output_name || '').toLowerCase().includes('hqplayer');
       const profileSelect = isHqp && hqpProfiles.length > 0 ?
         '<p class="muted" style="margin-top:0.5em;">Profile: <select class="hqp-profile-select" style="padding:0.2em;">' +
-        '<option value="">—</option>' +
         hqpProfiles.map(p => '<option value="' + escAttr(p.value) + '"' +
           ((hqpCurrentProfile && p.title.toLowerCase() === hqpCurrentProfile.toLowerCase()) ? ' selected' : '') + '>' +
           esc(p.title) + '</option>').join('') +
@@ -589,7 +588,7 @@ async function loadHqpProfiles(configName) {
   const res = await fetch('/hqp/profiles');
   const data = await res.json();
   const sel = document.getElementById('hqp-profile');
-  sel.innerHTML = '<option value="">-- Profile --</option>';
+  sel.innerHTML = '';
   (data.profiles || []).forEach(p => {
     const opt = document.createElement('option');
     opt.value = p.value || p;
