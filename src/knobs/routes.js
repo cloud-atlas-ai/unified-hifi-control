@@ -322,8 +322,8 @@ function createKnobRoutes({ roon, knobs, logger }) {
       <input type="text" id="hqp-host" placeholder="">
     </div>
     <div class="form-row">
-      <label>Port:</label>
-      <input type="text" id="hqp-port" value="8088" placeholder="8088 (Web UI)">
+      <label>Port (Web UI):</label>
+      <input type="text" id="hqp-port" value="8088" placeholder="8088">
     </div>
     <div class="form-row">
       <label>Username:</label>
