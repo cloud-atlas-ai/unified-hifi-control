@@ -410,7 +410,7 @@ ${navHtml('critical')}
   </div>
 </div>
 
-<div id="hqp-section" class="section">
+<div id="hqp-section" class="section hidden">
   <h3>HQPlayer DSP</h3>
   <div id="hqp-not-configured">
     <p class="muted">HQPlayer not configured. <a href="/admin/settings">Configure in Settings</a></p>
@@ -472,7 +472,7 @@ function updateZoneDisplay(np) {
 
   // Show/hide HQPlayer section based on zone (check if output contains HQPlayer)
   const isHqpZone = zone && (zone.output_name || '').toLowerCase().includes('hqplayer');
-  document.getElementById('hqp-section').style.display = isHqpZone ? 'block' : 'none';
+  document.getElementById('hqp-section').classList.toggle('hidden', !isHqpZone);
 }
 
 async function ctrl(action, value) {
