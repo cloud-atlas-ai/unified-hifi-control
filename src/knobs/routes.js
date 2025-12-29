@@ -327,11 +327,11 @@ function createKnobRoutes({ roon, knobs, logger }) {
     </div>
     <div class="form-row">
       <label>Username:</label>
-      <input type="text" id="hqp-username" placeholder="(optional)">
+      <input type="text" id="hqp-username" placeholder="(required for profiles)">
     </div>
     <div class="form-row">
       <label>Password:</label>
-      <input type="password" id="hqp-password" placeholder="(optional)">
+      <input type="password" id="hqp-password" placeholder="(required for profiles)">
     </div>
     <button onclick="saveHqpConfig()">Save</button>
     <button onclick="toggleHqpConfig()">Cancel</button>
