@@ -598,9 +598,9 @@ function fetchFirmware() {
   const host = window.location.hostname;
   const match = host.match(/^(\\d+\\.\\d+\\.\\d+)\\./);
   if (match) {
-    document.getElementById('hqp-host').placeholder = match[1] + '.x:8088';
+    document.getElementById('hqp-host').placeholder = match[1] + '.x';
   } else {
-    document.getElementById('hqp-host').placeholder = '192.168.1.x:8088';
+    document.getElementById('hqp-host').placeholder = '192.168.1.x';
   }
 })();
 
