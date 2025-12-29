@@ -174,9 +174,11 @@ function createRoonClient(opts = {}) {
   function updateZone(zone) {
     if (!zone || !zone.zone_id) return;
     const vol = zone.outputs?.[0]?.volume;
+    const three = zone.now_playing?.three_line || {};
     const summary = {
-      line1: zone.now_playing?.three_line?.line1 || zone.display_name || 'Unknown zone',
-      line2: zone.now_playing?.three_line?.line2 || '',
+      line1: three.line1 || zone.display_name || 'Unknown zone',
+      line2: three.line2 || '',
+      line3: three.line3 || '',
       is_playing: zone.state === 'playing',
       volume: vol?.value ?? null,
       volume_min: vol?.min ?? -80,

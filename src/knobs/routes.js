@@ -334,7 +334,9 @@ async function loadZones() {
 
     document.getElementById('zones').innerHTML = zones.map(zone => {
       const np = nowPlaying[zone.zone_id] || {};
-      const status = np.line1 ? np.line1 + (np.line2 ? ' — ' + np.line2 : '') : 'Stopped';
+      const track = np.line1 || 'Stopped';
+      const artist = np.line2 || '';
+      const album = np.line3 || '';
       const vol = typeof np.volume === 'number' ? np.volume : '—';
       const step = np.volume_step || 2;
       const playIcon = np.is_playing ? '⏸' : '▶';
@@ -342,7 +344,8 @@ async function loadZones() {
         <img class="art-lg" src="/now_playing/image?zone_id=\${encodeURIComponent(zone.zone_id)}&width=120&height=120" alt="">
         <div class="zone-info">
           <h3>\${zone.zone_name}</h3>
-          <p>\${status}</p>
+          <p><strong>\${track}</strong></p>
+          <p>\${artist}\${album ? ' • ' + album : ''}</p>
           <p class="muted">Volume: \${vol}</p>
           <div class="zone-controls">
             <button class="ctrl" onclick="ctrl('\${zone.zone_id}','vol_rel',\${-step})">−</button>
@@ -455,10 +458,17 @@ function updateZoneDisplay(np) {
   if (!np) np = {};
   const zone = zonesData.find(z => z.zone_id === selectedZone);
   document.getElementById('zone-name').textContent = zone?.zone_name || '';
-  document.getElementById('zone-status').textContent = np.line1 ? np.line1 + (np.line2 ? ' — ' + np.line2 : '') : 'Stopped';
+  const track = np.line1 || 'Stopped';
+  const artist = np.line2 || '';
+  const album = np.line3 || '';
+  document.getElementById('zone-status').innerHTML = '<strong>' + track + '</strong>' + (artist ? '<br>' + artist + (album ? ' • ' + album : '') : '');
   document.getElementById('zone-vol').textContent = typeof np.volume === 'number' ? np.volume : '—';
   document.getElementById('zone-art').src = '/now_playing/image?zone_id=' + encodeURIComponent(selectedZone) + '&width=120&height=120&t=' + Date.now();
   document.getElementById('play-btn').textContent = np.is_playing ? '⏸' : '▶';
+
+  // Show/hide HQPlayer section based on zone (check if output contains HQPlayer)
+  const isHqpZone = zone && (zone.output_name || '').toLowerCase().includes('hqplayer');
+  document.getElementById('hqp-section').style.display = isHqpZone ? 'block' : 'none';
 }
 
 async function ctrl(action, value) {
