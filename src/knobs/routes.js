@@ -694,9 +694,35 @@ async function loadProfile(profile) {
 }
 
 async function setPipeline(setting, value) {
+  // Disable all HQPlayer controls and show loading
+  const selects = ['hqp-mode', 'hqp-samplerate', 'hqp-filter1x', 'hqp-filterNx', 'hqp-shaper', 'hqp-profile'];
+  selects.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = true;
+  });
+  const msg = document.getElementById('hqp-msg');
+  msg.textContent = 'Updating...';
+  msg.className = 'status-msg';
+  document.body.style.cursor = 'wait';
+
   const res = await fetch('/hqp/pipeline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ setting, value }) });
-  document.getElementById('hqp-msg').textContent = res.ok ? setting + ' updated' : 'Error';
-  document.getElementById('hqp-msg').className = 'status-msg ' + (res.ok ? 'success' : 'error');
+
+  if (res.ok) {
+    // Refresh pipeline to show updated values
+    await loadHqpPipeline();
+    msg.textContent = setting + ' updated';
+    msg.className = 'status-msg success';
+  } else {
+    msg.textContent = 'Error';
+    msg.className = 'status-msg error';
+  }
+
+  // Re-enable controls
+  selects.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = false;
+  });
+  document.body.style.cursor = 'default';
 }
 
 loadZones();

@@ -429,23 +429,54 @@ class HQPClient {
 
   async setPipelineSetting(name, value) {
     // Use native protocol for pipeline changes
-    // Note: dither is not exposed in native protocol (part of shaper in HQPlayer)
+    // Note: UI sends VALUES (from option.value), but native protocol expects INDICES
+    // (array positions). We need to convert value → index for mode/filter/shaper.
+    // Samplerate is the exception - UI already sends index.
     const numValue = Number(value);
-    const state = await this.native.getState();
 
     switch (name) {
-      case 'mode':
-        return this.native.setMode(numValue);
-      case 'filter1x':
-        // setFilter(Nx, 1x) - keep current Nx, set new 1x
-        return this.native.setFilter(state.filterNx ?? state.filter, numValue);
-      case 'filterNx':
-        // setFilter(Nx, 1x) - set new Nx, keep current 1x
-        return this.native.setFilter(numValue, state.filter1x ?? state.filter);
-      case 'shaper':
-        return this.native.setShaping(numValue);
+      case 'mode': {
+        // Convert value (-1, 0, 1) to index (0, 1, 2)
+        const modes = await this.native.getModes();
+        const mode = modes.find(m => m.value === numValue);
+        if (!mode) throw new Error(`Invalid mode value: ${value}`);
+        return this.native.setMode(mode.index);
+      }
+
+      case 'filter1x': {
+        // Convert value to index, keep current Nx filter
+        const [filters, state] = await Promise.all([
+          this.native.getFilters(),
+          this.native.getState(),
+        ]);
+        const filter = filters.find(f => f.value === numValue);
+        if (!filter) throw new Error(`Invalid filter value: ${value}`);
+        return this.native.setFilter(state.filterNx ?? state.filter, filter.index);
+      }
+
+      case 'filterNx': {
+        // Convert value to index, keep current 1x filter
+        const [filters, state] = await Promise.all([
+          this.native.getFilters(),
+          this.native.getState(),
+        ]);
+        const filter = filters.find(f => f.value === numValue);
+        if (!filter) throw new Error(`Invalid filter value: ${value}`);
+        return this.native.setFilter(filter.index, state.filter1x ?? state.filter);
+      }
+
+      case 'shaper': {
+        // Convert value to index
+        const shapers = await this.native.getShapers();
+        const shaper = shapers.find(s => s.value === numValue);
+        if (!shaper) throw new Error(`Invalid shaper value: ${value}`);
+        return this.native.setShaping(shaper.index);
+      }
+
       case 'samplerate':
+        // Samplerate UI already sends index, not value
         return this.native.setRate(numValue);
+
       default:
         throw new Error(`Unknown setting: ${name}`);
     }
