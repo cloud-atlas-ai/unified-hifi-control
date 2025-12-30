@@ -38,6 +38,7 @@ class HQPNativeClient extends EventEmitter {
     this.log = logger || console;
     this.socket = null;
     this.connected = false;
+    this.connecting = null;  // Promise for in-progress connection
     this.buffer = '';
     this.pendingRequests = [];
     this.currentRequest = null;
@@ -59,25 +60,32 @@ class HQPNativeClient extends EventEmitter {
   }
 
   connect() {
-    return new Promise((resolve, reject) => {
-      if (!this.host) {
-        return reject(new Error('HQPlayer host not configured'));
-      }
+    if (!this.host) {
+      return Promise.reject(new Error('HQPlayer host not configured'));
+    }
 
-      if (this.connected && this.socket) {
-        return resolve();
-      }
+    if (this.connected && this.socket) {
+      return Promise.resolve();
+    }
 
+    // Return existing connection attempt if in progress
+    if (this.connecting) {
+      return this.connecting;
+    }
+
+    this.connecting = new Promise((resolve, reject) => {
       this.socket = new net.Socket();
       this.buffer = '';
 
       const timeout = setTimeout(() => {
+        this.connecting = null;
         this.socket.destroy();
         reject(new Error('Connection timeout'));
       }, CONNECT_TIMEOUT);
 
       this.socket.on('connect', () => {
         clearTimeout(timeout);
+        this.connecting = null;
         this.connected = true;
         this.log.info('HQPlayer native protocol connected', { host: this.host, port: this.port });
         this.emit('connected');
@@ -100,12 +108,15 @@ class HQPNativeClient extends EventEmitter {
         this.log.error('HQPlayer socket error', { error: err.message });
         this.emit('error', err);
         if (!this.connected) {
+          this.connecting = null;
           reject(err);
         }
       });
 
       this.socket.connect(this.port, this.host);
     });
+
+    return this.connecting;
   }
 
   handleData(data) {
