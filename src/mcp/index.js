@@ -249,7 +249,7 @@ async function handleTool(name, args) {
 
 async function main() {
   const server = new Server(
-    { name: 'unified-hifi-control', version: '0.1.0' },
+    { name: 'unified-hifi-control', version: '0.2.0' },
     { capabilities: { tools: {} }, instructions: SERVER_INSTRUCTIONS }
   );
 
