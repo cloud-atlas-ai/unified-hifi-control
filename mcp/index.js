@@ -12,6 +12,7 @@ const {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } = require('@modelcontextprotocol/sdk/types.js');
+const { version: VERSION } = require('../package.json');
 
 const BRIDGE_URL = process.env.HIFI_BRIDGE_URL || 'http://localhost:3000';
 
@@ -29,7 +30,7 @@ and HQPlayer Embedded audio processing. Use these tools when the user wants to:
 ### Playback Control (Roon)
 - **hifi_zones**: List all available playback zones. Start here to get zone IDs.
 - **hifi_now_playing**: Get current track, artist, album, play state, and volume for a zone.
-- **hifi_control**: Control playback (play, pause, next, previous, stop) or adjust volume.
+- **hifi_control**: Control playback (play, pause, next, previous) or adjust volume (volume_set, volume_up, volume_down).
 
 ### Audio Pipeline (HQPlayer Embedded)
 - **hifi_hqplayer_status**: Check if HQPlayer is configured and get current pipeline settings.
@@ -46,11 +47,12 @@ and HQPlayer Embedded audio processing. Use these tools when the user wants to:
    to see what's playing. This gives context for subsequent commands.
 
 2. **Playback control**: Always use the zone_id from \`hifi_zones\`. Actions include:
-   play, pause, playpause, next, previous, stop, volume.
+   play, pause, next, previous.
 
-3. **Volume adjustment**: Use \`hifi_control\` with action="volume". The value can be:
-   - Absolute (0-100): "Set volume to 50"
-   - Relative: "Turn it up" (+5), "Turn it down" (-5)
+3. **Volume adjustment**: Use \`hifi_control\` with these actions:
+   - \`volume_set\` with value (0-100): Set absolute volume level
+   - \`volume_up\` with optional value: Increase volume (default +5)
+   - \`volume_down\` with optional value: Decrease volume (default -5)
 
 4. **HQPlayer tweaking**: Check \`hifi_hqplayer_profiles\` for presets, or use
    \`hifi_hqplayer_set_pipeline\` for fine-grained control of filters and shapers.
@@ -97,13 +99,16 @@ const TOOLS = [
   },
   {
     name: 'hifi_control',
-    description: 'Control playback: play, pause, playpause, next, previous, stop, or adjust volume',
+    description: 'Control playback: play, pause, next, previous, or adjust volume',
     inputSchema: {
       type: 'object',
       properties: {
         zone_id: { type: 'string', description: 'The zone ID to control' },
-        action: { type: 'string', description: 'Action: play, pause, playpause, next, previous, stop, volume' },
-        value: { type: 'number', description: 'For volume action: absolute level (0-100) or relative change (-10, +5, etc)' },
+        action: {
+          type: 'string',
+          description: 'Action: play (toggle play/pause), pause (toggle play/pause), next, previous, volume_set (absolute), volume_up (relative increase), volume_down (relative decrease)',
+        },
+        value: { type: 'number', description: 'For volume actions: the level (0-100 for volume_set) or amount to change (for volume_up/volume_down)' },
       },
       required: ['zone_id', 'action'],
     },
@@ -165,8 +170,40 @@ async function handleTool(name, args) {
 
       case 'hifi_control': {
         const { zone_id, action, value } = args;
-        const body = { zone_id, action };
-        if (value !== undefined) body.value = value;
+        // Translate MCP actions to backend actions
+        let backendAction = action;
+        let backendValue = value;
+        switch (action) {
+          case 'play':
+          case 'pause':
+          case 'playpause':
+            backendAction = 'play_pause';
+            break;
+          case 'next':
+            backendAction = 'next';
+            break;
+          case 'previous':
+          case 'prev':
+            backendAction = 'previous';
+            break;
+          case 'volume_set':
+            backendAction = 'vol_abs';
+            backendValue = Number(value);
+            break;
+          case 'volume_up':
+            backendAction = 'vol_rel';
+            backendValue = Math.abs(Number(value) || 5); // default +5 if no value
+            break;
+          case 'volume_down':
+            backendAction = 'vol_rel';
+            backendValue = -Math.abs(Number(value) || 5); // default -5 if no value
+            break;
+          default:
+            // Pass through for any other actions
+            break;
+        }
+        const body = { zone_id, action: backendAction };
+        if (backendValue !== undefined) body.value = backendValue;
         await apiFetch('/control', { method: 'POST', body: JSON.stringify(body) });
         const data = await apiFetch(`/now_playing?zone_id=${encodeURIComponent(zone_id)}`);
         return { content: [{ type: 'text', text: `Action "${action}" executed.\n\nCurrent state:\n${JSON.stringify(data, null, 2)}` }] };
@@ -213,7 +250,7 @@ async function handleTool(name, args) {
 
 async function main() {
   const server = new Server(
-    { name: 'unified-hifi-control', version: '0.1.0' },
+    { name: 'unified-hifi-control', version: VERSION },
     { capabilities: { tools: {} }, instructions: SERVER_INSTRUCTIONS }
   );
 

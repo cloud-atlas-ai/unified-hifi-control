@@ -1,5 +1,7 @@
 const express = require('express');
 const sharp = require('sharp');
+const fs = require('fs');
+const path = require('path');
 
 function extractKnob(req) {
   const headerId = req.get('x-knob-id') || req.get('x-device-id');
@@ -245,6 +247,34 @@ function createKnobRoutes({ roon, knobs, logger }) {
     });
   });
 
+  // App settings (UI preferences)
+  const APP_SETTINGS_FILE = path.join(process.env.CONFIG_DIR || path.join(__dirname, '..', '..', 'data'), 'app-settings.json');
+
+  function loadAppSettings() {
+    try {
+      return JSON.parse(fs.readFileSync(APP_SETTINGS_FILE, 'utf8'));
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveAppSettings(settings) {
+    const dir = path.dirname(APP_SETTINGS_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(APP_SETTINGS_FILE, JSON.stringify(settings, null, 2));
+  }
+
+  router.get('/api/settings', (req, res) => {
+    res.json(loadAppSettings());
+  });
+
+  router.post('/api/settings', express.json(), (req, res) => {
+    const current = loadAppSettings();
+    const updated = { ...current, ...req.body };
+    saveAppSettings(updated);
+    res.json(updated);
+  });
+
   // Root redirect to Control page (normal listening)
   router.get('/', (req, res) => res.redirect('/control'));
 
@@ -308,7 +338,10 @@ function createKnobRoutes({ roon, knobs, logger }) {
     </nav>
   `;
 
-  const versionScript = `fetch('/status').then(r=>r.json()).then(d=>{document.getElementById('app-version').textContent='v'+d.version;});`;
+  const versionScript = `
+    fetch('/status').then(r=>r.json()).then(d=>{document.getElementById('app-version').textContent='v'+d.version;});
+    fetch('/api/settings').then(r=>r.json()).then(s=>{if(s.hideKnobsPage){const k=document.querySelector('nav a[href="/knobs"]');if(k)k.style.display='none';}}).catch(()=>{});
+  `;
 
   // HTML escape helper to prevent XSS
   const escapeScript = `
@@ -658,10 +691,18 @@ setInterval(loadZones, 4000);
     res.send(`<!DOCTYPE html><html><head><title>Knobs - Hi-Fi</title><style>${baseStyles}</style></head><body>
 ${navHtml('knobs')}
 <h2>Knob Devices</h2>
+<p id="community-link" style="margin-bottom:1em;"><a href="https://community.roonlabs.com/t/50-esp32-s3-knob-roon-controller/311363" target="_blank" rel="noopener">Knob Community Thread</a> - build info, firmware updates, discussion</p>
 <table>
   <thead><tr><th>ID</th><th>Name</th><th>Version</th><th>Zone</th><th>Battery</th><th>Last Seen</th><th></th></tr></thead>
   <tbody id="knobs-body"><tr><td colspan="7" class="muted">Loading...</td></tr></tbody>
 </table>
+
+<div class="section" style="margin-top:2em;">
+  <h3>Firmware</h3>
+  <p>Current: <span id="fw-version">checking...</span></p>
+  <button id="fetch-btn" onclick="fetchFirmware()">Fetch Latest from GitHub</button>
+  <span id="fw-msg" class="status-msg"></span>
+</div>
 
 <div id="configModal" class="modal-overlay">
   <div class="modal">
@@ -675,6 +716,7 @@ ${navHtml('knobs')}
 ${versionScript}
 ${escapeScript}
 let zonesData = [];
+
 
 function ago(ts) {
   if (!ts) return 'never';
@@ -771,7 +813,48 @@ async function saveConfig(e) {
 document.getElementById('configModal').addEventListener('click', e => { if (e.target.id === 'configModal') closeModal(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
+// Firmware
+async function loadFirmwareVersion() {
+  try {
+    const res = await fetch('/firmware/version');
+    if (res.ok) {
+      const data = await res.json();
+      document.getElementById('fw-version').textContent = 'v' + data.version;
+    } else {
+      document.getElementById('fw-version').textContent = 'Not installed';
+    }
+  } catch (e) {
+    document.getElementById('fw-version').textContent = 'Not installed';
+  }
+}
+
+async function fetchFirmware() {
+  const btn = document.getElementById('fetch-btn');
+  const msg = document.getElementById('fw-msg');
+  btn.disabled = true;
+  msg.textContent = 'Fetching...';
+  msg.className = 'status-msg';
+
+  try {
+    const res = await fetch('/admin/fetch-firmware', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      msg.textContent = 'Downloaded v' + data.version;
+      msg.className = 'status-msg success';
+      document.getElementById('fw-version').textContent = 'v' + data.version;
+    } else {
+      msg.textContent = 'Error: ' + data.error;
+      msg.className = 'status-msg error';
+    }
+  } catch (e) {
+    msg.textContent = 'Error: ' + e.message;
+    msg.className = 'status-msg error';
+  }
+  btn.disabled = false;
+}
+
 loadKnobs();
+loadFirmwareVersion();
 setInterval(loadKnobs, 5000);
 </script></body></html>`);
   });
@@ -784,11 +867,12 @@ ${navHtml('settings')}
 
 <div class="section">
   <h3>HQPlayer Embedded Configuration</h3>
+  <p class="muted" style="margin:0.5em 0;">Filter/shaper/rate control uses native protocol (port 4321). Profile switching requires web UI auth below.</p>
   <div id="hqp-status-line" class="muted">Checking...</div>
   <div id="hqp-config-form">
     <div class="form-row"><label>Host:</label><input type="text" id="hqp-host" placeholder="192.168.1.x"></div>
     <div class="form-row"><label>Port (Web UI):</label><input type="text" id="hqp-port" value="8088"></div>
-    <div class="form-row"><label>Username:</label><input type="text" id="hqp-username" placeholder="(required for profiles)"></div>
+    <div class="form-row"><label>Username:</label><input type="text" id="hqp-username" placeholder="(optional, for profile switching)"></div>
     <div class="form-row"><label>Password:</label><input type="password" id="hqp-password"></div>
     <button onclick="saveHqpConfig()">Save</button>
     <span id="hqp-save-msg" class="status-msg"></span>
@@ -796,10 +880,12 @@ ${navHtml('settings')}
 </div>
 
 <div class="section">
-  <h3>S3 Knob Firmware</h3>
-  <p>Current: <span id="fw-version">checking...</span></p>
-  <button id="fetch-btn" onclick="fetchFirmware()">Fetch Latest from GitHub</button>
-  <span id="fw-msg" class="status-msg"></span>
+  <h3>UI Settings</h3>
+  <div class="form-row">
+    <label><input type="checkbox" id="hide-knobs-page"> Hide Knobs page (if you don't have a knob)</label>
+  </div>
+  <button onclick="saveUiSettings()">Save</button>
+  <span id="ui-save-msg" class="status-msg"></span>
 </div>
 
 <div class="section">
@@ -841,46 +927,6 @@ async function saveHqpConfig() {
   loadHqpConfig();
 }
 
-// Firmware
-async function loadFirmwareVersion() {
-  try {
-    const res = await fetch('/firmware/version');
-    if (res.ok) {
-      const data = await res.json();
-      document.getElementById('fw-version').textContent = 'v' + data.version;
-    } else {
-      document.getElementById('fw-version').textContent = 'Not installed';
-    }
-  } catch (e) {
-    document.getElementById('fw-version').textContent = 'Not installed';
-  }
-}
-
-async function fetchFirmware() {
-  const btn = document.getElementById('fetch-btn');
-  const msg = document.getElementById('fw-msg');
-  btn.disabled = true;
-  msg.textContent = 'Fetching...';
-  msg.className = 'status-msg';
-
-  try {
-    const res = await fetch('/admin/fetch-firmware', { method: 'POST' });
-    const data = await res.json();
-    if (res.ok) {
-      msg.textContent = 'Downloaded v' + data.version;
-      msg.className = 'status-msg success';
-      document.getElementById('fw-version').textContent = 'v' + data.version;
-    } else {
-      msg.textContent = 'Error: ' + data.error;
-      msg.className = 'status-msg error';
-    }
-  } catch (e) {
-    msg.textContent = 'Error: ' + e.message;
-    msg.className = 'status-msg error';
-  }
-  btn.disabled = false;
-}
-
 // Status
 async function loadStatus() {
   const res = await fetch('/admin/status.json');
@@ -888,15 +934,39 @@ async function loadStatus() {
   document.getElementById('status').textContent = JSON.stringify(data, null, 2);
 }
 
+// UI Settings
+async function loadUiSettings() {
+  try {
+    const res = await fetch('/api/settings');
+    const data = await res.json();
+    document.getElementById('hide-knobs-page').checked = data.hideKnobsPage || false;
+  } catch (e) {}
+}
+
+async function saveUiSettings() {
+  const msg = document.getElementById('ui-save-msg');
+  const hideKnobsPage = document.getElementById('hide-knobs-page').checked;
+  try {
+    await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hideKnobsPage })
+    });
+    msg.textContent = 'Saved! Refresh to see nav changes.';
+    msg.className = 'status-msg success';
+  } catch (e) {
+    msg.textContent = 'Error saving';
+    msg.className = 'status-msg error';
+  }
+}
+
 loadHqpConfig();
-loadFirmwareVersion();
 loadStatus();
+loadUiSettings();
 </script></body></html>`);
   });
 
-  // Shared requires for firmware handling
-  const fs = require('fs');
-  const path = require('path');
+  // Firmware download config
   const https = require('https');
   const CONFIG_DIR = process.env.CONFIG_DIR || path.join(__dirname, '..', '..', 'data');
   const FIRMWARE_DIR = process.env.FIRMWARE_DIR || path.join(CONFIG_DIR, 'firmware');
