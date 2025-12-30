@@ -12,14 +12,15 @@
  */
 
 const net = require('net');
-const { XMLParser, XMLBuilder } = require('fast-xml-parser');
+const xpath = require('xpath');
+const { DOMParser } = require('xmldom');
 const { EventEmitter } = require('events');
 
 const DEFAULT_PORT = 4321;
 const CONNECT_TIMEOUT = 5000;
 const RESPONSE_TIMEOUT = 10000;
 
-// Commands that return multiple items before end element
+// Commands that return multiple items - maps command to item element name
 const MULTI_ITEM_COMMANDS = {
   GetModes: 'ModesItem',
   GetFilters: 'FiltersItem',
@@ -41,13 +42,7 @@ class HQPNativeClient extends EventEmitter {
     this.pendingRequests = [];
     this.currentRequest = null;
     this.collectingItems = null;
-
-    // XML parser config - parse attributes with @ prefix
-    this.parser = new XMLParser({
-      ignoreAttributes: false,
-      attributeNamePrefix: '',
-      parseAttributeValue: true,
-    });
+    this.domParser = new DOMParser();
   }
 
   isConfigured() {
@@ -132,71 +127,130 @@ class HQPNativeClient extends EventEmitter {
     if (!this.currentRequest) return;
 
     try {
-      const parsed = this.parser.parse(xml);
-      const { command, resolve, reject, timeout } = this.currentRequest;
+      const doc = this.domParser.parseFromString(xml, 'text/xml');
+      const { command, resolve, timeout } = this.currentRequest;
       const itemType = MULTI_ITEM_COMMANDS[command];
 
-      // Get the root element name and its content
-      const rootName = Object.keys(parsed).find(k => k !== '?xml');
-      const rootContent = parsed[rootName];
-
-      // Multi-item command handling
-      if (itemType && rootName === command) {
-        // Check if self-contained response (items embedded in same XML)
-        if (rootContent && rootContent[itemType]) {
+      // Multi-item commands - extract items with xpath
+      if (itemType) {
+        const itemNodes = xpath.select(`//${itemType}`, doc);
+        if (itemNodes.length > 0) {
           clearTimeout(timeout);
-          const items = Array.isArray(rootContent[itemType])
-            ? rootContent[itemType]
-            : [rootContent[itemType]];
-          const meta = { ...rootContent };
-          delete meta[itemType];
-
           this.currentRequest = null;
-          this.collectingItems = null;
-          resolve({ ...meta, items });
+          resolve({ items: itemNodes.map(node => this.parseItem(itemType, node)) });
           this.processNextRequest();
           return;
         }
-
-        // Start collecting (items will come on separate lines)
-        if (!this.collectingItems) {
-          this.collectingItems = {
-            meta: typeof rootContent === 'object' ? { ...rootContent } : {},
-            items: [],
-          };
-          delete this.collectingItems.meta[itemType];
-          return;
-        }
-
-        // End - closing tag (we got items separately)
-        if (this.collectingItems) {
-          clearTimeout(timeout);
-          const result = { ...this.collectingItems.meta, items: this.collectingItems.items };
-          this.currentRequest = null;
-          this.collectingItems = null;
-          resolve(result);
-          this.processNextRequest();
-          return;
-        }
-      }
-
-      // Item element (on separate line)
-      if (itemType && rootName === itemType && this.collectingItems) {
-        this.collectingItems.items.push(
-          typeof rootContent === 'object' ? rootContent : {}
-        );
-        return;
       }
 
       // Single element response
+      const root = doc.documentElement;
+      if (!root) return;
+
       clearTimeout(timeout);
       this.currentRequest = null;
-      resolve(typeof rootContent === 'object' ? rootContent : { result: rootContent });
+      resolve(this.parseResponse(root));
       this.processNextRequest();
 
     } catch (err) {
       this.log.error('XML parse error', { error: err.message, xml: xml.slice(0, 200) });
-      // Don't reject - might be partial data or noise
+    }
+  }
+
+  parseItem(itemType, node) {
+    const str = (name) => xpath.select(`string(@${name})`, node);
+    const num = (name) => Number(str(name)) || 0;
+
+    switch (itemType) {
+      case 'ModesItem':
+        return { index: num('index'), name: str('name'), value: num('value') };
+
+      case 'FiltersItem':
+        return { index: num('index'), name: str('name'), value: num('value'), arg: num('arg') };
+
+      case 'ShapersItem':
+        return { index: num('index'), name: str('name'), value: num('value') };
+
+      case 'RatesItem':
+        return { index: num('index'), rate: num('rate') };
+
+      case 'InputsItem':
+        return { name: str('name') };
+
+      case 'ConfigurationItem':
+        return { name: str('name') };
+
+      default:
+        return { name: str('name'), value: num('value') };
+    }
+  }
+
+  parseResponse(root) {
+    const str = (name) => root.getAttribute(name) || '';
+    const num = (name) => Number(root.getAttribute(name)) || 0;
+    const numOrNull = (name) => root.hasAttribute(name) ? Number(root.getAttribute(name)) : null;
+    const bool = (name) => root.getAttribute(name) === '1';
+
+    switch (root.nodeName) {
+      case 'State':
+        return {
+          state: num('state'),           // 0=stopped, 1=paused, 2=playing
+          mode: num('mode'),             // PCM=0, SDM=1
+          filter: num('filter'),         // legacy single filter
+          filter1x: numOrNull('filter1x'),  // 1x oversampling filter (if set)
+          filterNx: numOrNull('filterNx'),  // Nx oversampling filter (if set)
+          shaper: num('shaper'),
+          rate: num('rate'),
+          volume: num('volume'),
+          activeMode: num('active_mode'),
+          activeRate: num('active_rate'),
+          invert: bool('invert'),
+          convolution: bool('convolution'),
+          repeat: num('repeat'),         // 0=off, 1=track, 2=all
+          random: bool('random'),
+          adaptive: bool('adaptive'),
+          filter20k: bool('filter_20k'),
+          matrixProfile: str('matrix_profile'),
+        };
+
+      case 'GetInfo':
+        return {
+          name: str('name'),
+          product: str('product'),
+          version: str('version'),
+          platform: str('platform'),
+          engine: str('engine'),
+        };
+
+      case 'Status':
+        return {
+          state: num('state'),
+          track: num('track'),
+          trackId: str('track_id'),
+          position: num('position'),
+          length: num('length'),
+          volume: num('volume'),
+          activeMode: str('active_mode'),
+          activeFilter: str('active_filter'),
+          activeShaper: str('active_shaper'),
+          activeRate: num('active_rate'),
+          activeBits: num('active_bits'),
+          activeChannels: num('active_channels'),
+          samplerate: num('samplerate'),
+          bitrate: num('bitrate'),
+        };
+
+      case 'VolumeRange':
+        return {
+          min: num('min'),
+          max: num('max'),
+          step: num('step') || 1,
+          enabled: bool('enabled'),
+          adaptive: bool('adaptive'),
+        };
+
+      default:
+        return { result: str('result') || 'OK' };
     }
   }
 
@@ -401,60 +455,73 @@ class HQPNativeClient extends EventEmitter {
    * Get full pipeline status in a format compatible with existing HQPClient
    */
   async getPipelineStatus() {
-    const [state, modes, filters, shapers, rates] = await Promise.all([
+    const [state, modes, filters, shapers, rates, volRange] = await Promise.all([
       this.getState(),
       this.getModes(),
       this.getFilters(),
       this.getShapers(),
       this.getRates(),
+      this.getVolumeRange(),
     ]);
+
+    // Determine active filter values - use filter1x/filterNx if set, else legacy filter
+    const filter1xVal = state.filter1x !== null ? state.filter1x : state.filter;
+    const filterNxVal = state.filterNx !== null ? state.filterNx : state.filter;
+
+    // Mode lookup - state.mode is index, activeMode is value
+    const getModeByIndex = (idx) => modes.find(m => m.index === idx)?.name || '';
+    const getModeByValue = (val) => modes.find(m => m.value === val)?.name || '';
 
     return {
       status: {
-        state: ['Stopped', 'Paused', 'Playing'][Number(state.state)] || 'Unknown',
-        activeMode: modes.find(m => String(m.value) === String(state.mode))?.name || state.active_mode || '',
-        activeFilter: filters.find(f => String(f.value) === String(state.filter))?.name || '',
-        activeShaper: shapers.find(s => String(s.value) === String(state.shaper))?.name || '',
+        state: ['Stopped', 'Paused', 'Playing'][state.state] || 'Unknown',
+        mode: getModeByIndex(state.mode),
+        activeMode: getModeByValue(state.activeMode),
+        activeFilter: filters.find(f => f.value === filter1xVal)?.name || '',
+        activeShaper: shapers.find(s => s.value === state.shaper)?.name || '',
+        activeRate: state.activeRate || 0,
+        convolution: state.convolution,
+        invert: state.invert,
       },
       volume: {
-        value: Number(state.volume) || 0,
-        min: -48,
-        max: 0,
-        isFixed: false,
+        value: state.volume,
+        min: volRange.min,
+        max: volRange.max,
+        isFixed: !volRange.enabled,
       },
       settings: {
         mode: {
           selected: {
-            value: String(state.mode),
-            label: modes.find(m => String(m.value) === String(state.mode))?.name || '',
+            value: String(modes.find(m => m.index === state.mode)?.value ?? state.mode),
+            label: getModeByIndex(state.mode),
           },
           options: modes.map(m => ({ value: String(m.value), label: m.name })),
         },
         filter1x: {
           selected: {
-            value: String(state.filter),
-            label: filters.find(f => String(f.value) === String(state.filter))?.name || '',
+            value: String(filter1xVal),
+            label: filters.find(f => f.value === filter1xVal)?.name || '',
           },
           options: filters.map(f => ({ value: String(f.value), label: f.name })),
         },
         filterNx: {
           selected: {
-            value: String(state.filter),
-            label: filters.find(f => String(f.value) === String(state.filter))?.name || '',
+            value: String(filterNxVal),
+            label: filters.find(f => f.value === filterNxVal)?.name || '',
           },
           options: filters.map(f => ({ value: String(f.value), label: f.name })),
         },
         shaper: {
           selected: {
             value: String(state.shaper),
-            label: shapers.find(s => String(s.value) === String(state.shaper))?.name || '',
+            label: shapers.find(s => s.value === state.shaper)?.name || '',
           },
           options: shapers.map(s => ({ value: String(s.value), label: s.name })),
         },
         samplerate: {
           selected: {
             value: String(state.rate),
-            label: rates.find(r => String(r.index) === String(state.rate))?.rate?.toString() || 'Auto',
+            label: rates.find(r => r.index === state.rate)?.rate?.toString() || 'Auto',
           },
           options: [
             { value: '0', label: 'Auto' },
@@ -471,7 +538,8 @@ class HQPNativeClient extends EventEmitter {
  */
 function discoverHQPlayers(timeout = 3000) {
   const dgram = require('dgram');
-  const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' });
+  const { DOMParser } = require('xmldom');
+  const domParser = new DOMParser();
 
   return new Promise((resolve) => {
     const discovered = new Map();
@@ -484,16 +552,20 @@ function discoverHQPlayers(timeout = 3000) {
 
     socket.on('message', (msg, rinfo) => {
       try {
-        const parsed = parser.parse(msg.toString('utf8'));
-        const discover = parsed.discover;
+        const doc = domParser.parseFromString(msg.toString('utf8'), 'text/xml');
+        const root = doc.documentElement;
 
-        if (discover && discover.result === 'OK') {
-          discovered.set(rinfo.address, {
-            host: rinfo.address,
-            port: 4321,
-            name: discover.name || 'HQPlayer',
-            version: discover.version || 'unknown',
-          });
+        if (root && root.nodeName === 'discover') {
+          const result = root.getAttribute('result');
+          if (result === 'OK') {
+            discovered.set(rinfo.address, {
+              host: rinfo.address,
+              port: 4321,
+              name: root.getAttribute('name') || 'HQPlayer',
+              version: root.getAttribute('version') || 'unknown',
+              product: root.getAttribute('product') || null,
+            });
+          }
         }
       } catch (e) {
         // Ignore parse errors

@@ -24,14 +24,15 @@
     "bonjour": "^3.5.0",
     "cors": "^2.8.5",
     "express": "^5.2.1",
-    "fast-xml-parser": "^5.3.3",
     "morgan": "^1.10.1",
     "mqtt": "^5.14.1",
     "node-roon-api": "github:roonlabs/node-roon-api",
     "node-roon-api-image": "github:roonlabs/node-roon-api-image",
     "node-roon-api-status": "github:roonlabs/node-roon-api-status",
     "node-roon-api-transport": "github:roonlabs/node-roon-api-transport",
-    "sharp": "^0.34.5"
+    "sharp": "^0.34.5",
+    "xmldom": "^0.6.0",
+    "xpath": "^0.0.34"
   },
   "devDependencies": {
     "jest": "^29.7.0",
