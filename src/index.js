@@ -1,5 +1,6 @@
 const os = require('os');
 const { createRoonClient } = require('./roon/client');
+const { createUPnPClient } = require('./upnp/client');
 const { HQPClient } = require('./hqplayer/client');
 const { createMqttService } = require('./mqtt');
 const { createApp } = require('./server/app');
@@ -8,6 +9,7 @@ const { advertise } = require('./lib/mdns');
 const { createKnobsStore } = require('./knobs/store');
 const { createBus } = require('./bus');
 const { RoonAdapter } = require('./bus/adapters/roon');
+const { UPnPAdapter } = require('./bus/adapters/upnp');
 const busDebug = require('./bus/debug');
 
 const PORT = process.env.PORT || 8088;
@@ -37,6 +39,11 @@ const roon = createRoonClient({
   base_url: baseUrl,
 });
 
+// Create UPnP client
+const upnp = createUPnPClient({
+  logger: createLogger('UPnP'),
+});
+
 // Create HQPlayer client (unconfigured initially, configured via API or env vars)
 const hqp = new HQPClient({
   logger: createLogger('HQP'),
@@ -47,6 +54,9 @@ const bus = createBus({ logger: createLogger('Bus') });
 
 const roonAdapter = new RoonAdapter(roon);
 bus.registerBackend('roon', roonAdapter);
+
+const upnpAdapter = new UPnPAdapter(upnp);
+bus.registerBackend('upnp', upnpAdapter);
 
 // Initialize debug consumer
 busDebug.init(bus);
