@@ -87,25 +87,29 @@ function createBus({ logger } = {}) {
     return backends.get(backend) || null;
   }
 
-  function getNowPlaying(zone_id) {
+  function getNowPlaying(zone_id, opts = {}) {
     const adapter = getAdapterForZone(zone_id);
+    const sender = opts.sender || {};
+
     if (!adapter) {
       log.warn(`No adapter for zone: ${zone_id}`);
-      notifyObservers({ type: 'getNowPlaying', zone_id, error: 'No adapter found', timestamp: Date.now() });
+      notifyObservers({ type: 'getNowPlaying', zone_id, error: 'No adapter found', sender, timestamp: Date.now() });
       return null;
     }
     const result = adapter.getNowPlaying(zone_id);
-    notifyObservers({ type: 'getNowPlaying', zone_id, backend: zone_id.split(':')[0], has_data: !!result, timestamp: Date.now() });
+    notifyObservers({ type: 'getNowPlaying', zone_id, backend: zone_id.split(':')[0], has_data: !!result, sender, timestamp: Date.now() });
     return result;
   }
 
-  async function control(zone_id, action, value) {
+  async function control(zone_id, action, value, opts = {}) {
     const adapter = getAdapterForZone(zone_id);
+    const sender = opts.sender || {};
+
     if (!adapter) {
-      notifyObservers({ type: 'control', zone_id, action, value, error: 'Zone not found', timestamp: Date.now() });
+      notifyObservers({ type: 'control', zone_id, action, value, error: 'Zone not found', sender, timestamp: Date.now() });
       throw new Error(`Zone not found: ${zone_id}`);
     }
-    notifyObservers({ type: 'control', zone_id, backend: zone_id.split(':')[0], action, value, timestamp: Date.now() });
+    notifyObservers({ type: 'control', zone_id, backend: zone_id.split(':')[0], action, value, sender, timestamp: Date.now() });
     return adapter.control(zone_id, action, value);
   }
 

@@ -191,7 +191,8 @@ function createKnobRoutes({ bus, roon, knobs, logger }) {
 
     try {
       log.info('control', { zone_id, action, value, ip: req.ip });
-      await (bus ? bus.control(zone_id, action, value) : roon.control(zone_id, action, value));
+      const sender = { ip: req.ip, user_agent: req.get('user-agent') };
+      await (bus ? bus.control(zone_id, action, value, { sender }) : roon.control(zone_id, action, value));
       res.json({ status: 'ok' });
     } catch (error) {
       log.error('control failed', { zone_id, action, value, ip: req.ip, error: error.message });
@@ -265,7 +266,7 @@ function createKnobRoutes({ bus, roon, knobs, logger }) {
   router.get('/admin/bus', (req, res) => {
     if (!bus) return res.status(404).send('Bus not available');
     const debug = busDebug.getDebugInfo();
-    res.send(`<!DOCTYPE html><html><head><title>Bus Debug</title><meta http-equiv="refresh" content="5"><style>body{font-family:monospace;margin:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}.error{color:red}</style></head><body><h1>Bus (${debug.message_count} msgs, 5m)</h1><table><tr><th>Time</th><th>Type</th><th>Zone</th><th>Details</th></tr>${debug.messages.slice(-50).reverse().map(m=>{const t=new Date(m.timestamp).toLocaleTimeString();const c=m.error?'class="error"':'';const d=m.action?m.action+(m.value!==undefined?' ('+m.value+')':''):m.has_data!==undefined?'data:'+m.has_data:m.error||'';return`<tr ${c}><td>${t}</td><td>${m.type}</td><td>${m.zone_id||m.backend||'-'}</td><td>${d}</td></tr>`;}).join('')}</table></body></html>`);
+    res.send(`<!DOCTYPE html><html><head><title>Bus Debug</title><meta http-equiv="refresh" content="5"><style>body{font-family:monospace;margin:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}.error{color:red}.sender{color:#666;font-size:10px}</style></head><body><h1>Bus (${debug.message_count} msgs, 5m)</h1><table><tr><th>Time</th><th>Type</th><th>Zone</th><th>Details</th><th>Sender</th></tr>${debug.messages.slice(-50).reverse().map(m=>{const t=new Date(m.timestamp).toLocaleTimeString();const c=m.error?'class="error"':'';const d=m.action?m.action+(m.value!==undefined?' ('+m.value+')':''):m.has_data!==undefined?'data:'+m.has_data:m.error||'';const s=m.sender?(m.sender.knob_id?'knob:'+m.sender.knob_id:m.sender.ip||''):'';return`<tr ${c}><td>${t}</td><td>${m.type}</td><td>${m.zone_id||m.backend||'-'}</td><td>${d}</td><td class="sender">${s}</td></tr>`;}).join('')}</table></body></html>`);
   });
 
   // App settings (UI preferences)
