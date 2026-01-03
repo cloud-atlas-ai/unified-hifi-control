@@ -68,6 +68,10 @@ function createBus({ logger } = {}) {
   }
 
   function getZones() {
+    // Auto-refresh if zones empty (e.g., Roon paired after start)
+    if (zones.size === 0 && backends.size > 0) {
+      refreshZones();
+    }
     return Array.from(zones.values()).map(({ zone }) => zone);
   }
 

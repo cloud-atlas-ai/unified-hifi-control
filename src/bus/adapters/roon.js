@@ -9,8 +9,9 @@
  */
 
 class RoonAdapter {
-  constructor(roonClient) {
+  constructor(roonClient, { onZonesChanged } = {}) {
     this.roon = roonClient;
+    this.onZonesChanged = onZonesChanged;
   }
 
   async start() {
