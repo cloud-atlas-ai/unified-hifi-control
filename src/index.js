@@ -33,10 +33,14 @@ function getLocalIp() {
 const localIp = getLocalIp();
 const baseUrl = `http://${localIp}:${PORT}`;
 
-// Create Roon client
+// Create bus first so we can reference it in callbacks
+const bus = createBus({ logger: createLogger('Bus') });
+
+// Create Roon client with callback
 const roon = createRoonClient({
   logger: createLogger('Roon'),
   base_url: baseUrl,
+  onZonesChanged: () => bus.refreshZones('roon'),
 });
 
 // Create UPnP client
@@ -49,12 +53,8 @@ const hqp = new HQPClient({
   logger: createLogger('HQP'),
 });
 
-// Create and configure bus
-const bus = createBus({ logger: createLogger('Bus') });
-
-const roonAdapter = new RoonAdapter(roon, {
-  onZonesChanged: () => bus.refreshZones('roon'),
-});
+// Create Roon adapter (bus already created above)
+const roonAdapter = new RoonAdapter(roon);
 bus.registerBackend('roon', roonAdapter);
 
 const upnpAdapter = new UPnPAdapter(upnp, {
