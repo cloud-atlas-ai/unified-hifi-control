@@ -276,22 +276,8 @@ function createKnobRoutes({ bus, roon, knobs, logger }) {
     res.send(`<!DOCTYPE html><html><head><title>Bus Debug</title><meta http-equiv="refresh" content="5"><style>body{font-family:monospace;margin:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}.error{color:red}.sender{color:#666;font-size:10px}</style></head><body><h1>Bus (${debug.message_count} msgs, 5m)</h1><table><tr><th>Time</th><th>Type</th><th>Zone</th><th>Details</th><th>Sender</th></tr>${debug.messages.slice(-50).reverse().map(m=>{const t=new Date(m.timestamp).toLocaleTimeString();const c=m.error?'class="error"':'';const d=m.action?m.action+(m.value!==undefined?' ('+m.value+')':''):m.has_data!==undefined?'data:'+m.has_data:m.error||'';const s=m.sender?(m.sender.knob_id?'knob:'+m.sender.knob_id:m.sender.ip||''):'';return`<tr ${c}><td>${t}</td><td>${m.type}</td><td>${m.zone_id||m.backend||'-'}</td><td>${d}</td><td class="sender">${s}</td></tr>`;}).join('')}</table></body></html>`);
   });
 
-  // App settings (UI preferences)
-  const APP_SETTINGS_FILE = path.join(process.env.CONFIG_DIR || path.join(__dirname, '..', '..', 'data'), 'app-settings.json');
-
-  function loadAppSettings() {
-    try {
-      return JSON.parse(fs.readFileSync(APP_SETTINGS_FILE, 'utf8'));
-    } catch (e) {
-      return {};
-    }
-  }
-
-  function saveAppSettings(settings) {
-    const dir = path.dirname(APP_SETTINGS_FILE);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(APP_SETTINGS_FILE, JSON.stringify(settings, null, 2));
-  }
+  // App settings (UI preferences) - use shared module
+  const { loadAppSettings, saveAppSettings } = require('../lib/settings');
 
   router.get('/api/settings', (req, res) => {
     res.json(loadAppSettings());
@@ -992,6 +978,22 @@ ${navHtml('settings')}
 </div>
 
 <div class="section">
+  <h3>Audio Backends</h3>
+  <p class="muted" style="margin:0 0 1em;">Select which audio backends to enable. Changes require restart.</p>
+  <div class="form-row">
+    <label><input type="checkbox" id="adapter-roon"> Roon</label>
+  </div>
+  <div class="form-row">
+    <label><input type="checkbox" id="adapter-upnp"> UPnP/DLNA (basic renderers)</label>
+  </div>
+  <div class="form-row">
+    <label><input type="checkbox" id="adapter-openhome"> OpenHome (BubbleUPnP, Linn, etc.)</label>
+  </div>
+  <button onclick="saveAdapterSettings()">Save</button>
+  <span id="adapter-save-msg" class="status-msg"></span>
+</div>
+
+<div class="section">
   <h3>Status</h3>
   <pre id="status" style="font-size:0.85em;overflow-x:auto;"></pre>
   <details style="margin-top:1em;">
@@ -1106,9 +1108,43 @@ async function saveUiSettings() {
   }
 }
 
+// Adapter Settings
+async function loadAdapterSettings() {
+  try {
+    const res = await fetch('/api/settings');
+    const data = await res.json();
+    const adapters = data.adapters || { roon: true, upnp: false, openhome: false };
+    document.getElementById('adapter-roon').checked = adapters.roon !== false;
+    document.getElementById('adapter-upnp').checked = adapters.upnp || false;
+    document.getElementById('adapter-openhome').checked = adapters.openhome || false;
+  } catch (e) {}
+}
+
+async function saveAdapterSettings() {
+  const msg = document.getElementById('adapter-save-msg');
+  const adapters = {
+    roon: document.getElementById('adapter-roon').checked,
+    upnp: document.getElementById('adapter-upnp').checked,
+    openhome: document.getElementById('adapter-openhome').checked
+  };
+  try {
+    await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adapters })
+    });
+    msg.textContent = 'Saved! Restart to apply changes.';
+    msg.className = 'status-msg success';
+  } catch (e) {
+    msg.textContent = 'Error saving';
+    msg.className = 'status-msg error';
+  }
+}
+
 loadHqpConfig();
 loadStatus();
 loadUiSettings();
+loadAdapterSettings();
 </script></body></html>`);
   });
 
