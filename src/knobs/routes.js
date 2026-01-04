@@ -1025,7 +1025,7 @@ ${navHtml('settings')}
 
 <div class="section">
   <h3>Audio Backends</h3>
-  <p class="muted" style="margin:0 0 1em;">Select which audio backends to enable. Changes apply immediately.</p>
+  <p class="muted" style="margin:0 0 1em;">Select which audio backends to enable. Changes apply immediately but may take a minute to discover devices. Restart knobs to pick up new zones.</p>
   <div class="form-row">
     <label><input type="checkbox" id="adapter-roon"> Roon</label>
   </div>
