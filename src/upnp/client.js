@@ -316,17 +316,19 @@ function createUPnPClient(opts = {}) {
       case 'previous':
       case 'prev':
         throw new Error('Previous track not supported');
-      case 'vol_abs':
-        const volume2 = Math.max(0, Math.min(100, Number(value) || 0));
-        await promisify(client, 'setVolume', volume2);
-        renderer.info.volume = volume2;
+      case 'vol_abs': {
+        const volume = Math.max(0, Math.min(100, Number(value) || 0));
+        await promisify(client, 'setVolume', volume);
+        renderer.info.volume = volume;
         break;
-      case 'vol_rel':
+      }
+      case 'vol_rel': {
         const currentVolume = await promisify(client, 'getVolume');
         const newVolume = Math.max(0, Math.min(100, currentVolume + (Number(value) || 0)));
         await promisify(client, 'setVolume', newVolume);
         renderer.info.volume = newVolume;
         break;
+      }
       default:
         throw new Error('Unknown action');
     }

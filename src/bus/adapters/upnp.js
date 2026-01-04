@@ -59,12 +59,13 @@ class UPnPAdapter {
       const protocol = image_key.startsWith('https') ? https : http;
 
       return new Promise((resolve, reject) => {
+        let req;
         const timeout = setTimeout(() => {
-          req.destroy();
+          if (req) req.destroy();
           reject(new Error('Image fetch timeout'));
         }, 5000);
 
-        const req = protocol.get(image_key, (res) => {
+        req = protocol.get(image_key, (res) => {
           clearTimeout(timeout);
 
           // Handle redirects

@@ -374,17 +374,19 @@ function createOpenHomeClient(opts = {}) {
       case 'prev':
         await callTransport('SkipPrevious');
         break;
-      case 'vol_abs':
+      case 'vol_abs': {
         const volume = Math.max(0, Math.min(100, Number(value) || 0));
         await callVolume('SetVolume', { Value: volume });
         device.volume = volume;
         break;
-      case 'vol_rel':
+      }
+      case 'vol_rel': {
         const delta = Number(value) || 0;
         const targetVolume = Math.max(0, Math.min(100, (device.volume || 0) + delta));
         await callVolume('SetVolume', { Value: targetVolume });
         device.volume = targetVolume;
         break;
+      }
       default:
         throw new Error(`Unknown action: ${action}`);
     }
@@ -404,12 +406,13 @@ function createOpenHomeClient(opts = {}) {
     const protocol = image_key.startsWith('https') ? https : http;
 
     return new Promise((resolve, reject) => {
+      let req;
       const timeout = setTimeout(() => {
-        req.destroy();
+        if (req) req.destroy();
         reject(new Error('Image fetch timeout'));
       }, 5000);
 
-      const req = protocol.get(image_key, (res) => {
+      req = protocol.get(image_key, (res) => {
         clearTimeout(timeout);
 
         // Handle redirects
