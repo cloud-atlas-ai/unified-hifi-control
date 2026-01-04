@@ -54,12 +54,26 @@ function createUPnPClient(opts = {}) {
                 const modelName = device?.modelName;
                 const manufacturer = device?.manufacturer;
 
+                // Check for OpenHome services
+                const serviceList = device?.serviceList?.service || [];
+                const services = Array.isArray(serviceList) ? serviceList : [serviceList];
+                const hasOpenHomeInfo = services.some(s =>
+                  s.serviceType?.includes('av-openhome-org:service:Info')
+                );
+
                 const renderer = state.renderers.get(uuid);
                 if (renderer) {
                   renderer.info.name = friendlyName || `Renderer ${uuid.substring(0, 8)}`;
                   renderer.info.manufacturer = manufacturer || null;
                   renderer.info.model = modelName || null;
-                  log.info('Got device info', { uuid, name: renderer.info.name, model: modelName });
+                  renderer.hasOpenHome = hasOpenHomeInfo;
+
+                  log.info('Got device info', {
+                    uuid,
+                    name: renderer.info.name,
+                    model: modelName,
+                    openHome: hasOpenHomeInfo
+                  });
                   onZonesChanged();
                 }
                 resolve();
@@ -78,8 +92,13 @@ function createUPnPClient(opts = {}) {
 
   // Handle discovered devices
   ssdpClient.on('response', (headers, statusCode, rinfo) => {
-    // Only process MediaRenderer devices
-    if (headers.ST !== RENDERER_SERVICE_TYPE && headers.NT !== RENDERER_SERVICE_TYPE) {
+    const st = headers.ST || headers.NT;
+
+    // Process MediaRenderer OR OpenHome devices
+    const isMediaRenderer = st === RENDERER_SERVICE_TYPE;
+    const isOpenHome = st && st.includes('av-openhome-org');
+
+    if (!isMediaRenderer && !isOpenHome) {
       return;
     }
 
@@ -216,7 +235,9 @@ function createUPnPClient(opts = {}) {
 
   function performSearch() {
     try {
+      // Search for both MediaRenderer and OpenHome devices
       state.ssdpClient.search(RENDERER_SERVICE_TYPE);
+      state.ssdpClient.search('urn:av-openhome-org:service:Product:1');
     } catch (err) {
       log.error('SSDP search failed', { error: err.message });
     }
@@ -224,8 +245,13 @@ function createUPnPClient(opts = {}) {
 
   async function pollTrackInfo() {
     const now = Date.now();
-    
+
     for (const [uuid, renderer] of state.renderers.entries()) {
+      // Only poll OpenHome devices
+      if (!renderer.hasOpenHome) {
+        continue;
+      }
+
       // Only poll playing devices
       if (renderer.info.state !== 'playing') {
         continue;
@@ -243,23 +269,28 @@ function createUPnPClient(opts = {}) {
       }
 
       try {
-        const positionInfo = await new Promise((resolve, reject) => {
+        // Query OpenHome Info:Track service
+        const trackInfo = await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => reject(new Error('Timeout')), 3000);
-          renderer.deviceClient.callAction('AVTransport', 'GetPositionInfo', { InstanceID: 0 }, (err, result) => {
-            clearTimeout(timeout);
-            if (err) return reject(err);
-            resolve(result);
-          });
+          renderer.deviceClient.callAction(
+            'urn:av-openhome-org:serviceId:Info',
+            'Track',
+            {},
+            (err, result) => {
+              clearTimeout(timeout);
+              if (err) return reject(err);
+              resolve(result);
+            }
+          );
         });
 
-        // Only parse if track URI changed
-        const trackURI = positionInfo.TrackURI;
-        if (trackURI && trackURI !== renderer.lastTrackURI) {
-          renderer.lastTrackURI = trackURI;
-          
-          if (positionInfo.TrackMetaData && positionInfo.TrackMetaData !== 'NOT_IMPLEMENTED') {
+        // Only parse if URI changed
+        if (trackInfo.Uri && trackInfo.Uri !== renderer.lastTrackUri) {
+          renderer.lastTrackUri = trackInfo.Uri;
+
+          if (trackInfo.Metadata) {
             const metadata = await new Promise((resolve, reject) => {
-              parseString(positionInfo.TrackMetaData, { explicitArray: false, trim: true }, (err, result) => {
+              parseString(trackInfo.Metadata, { explicitArray: false, trim: true }, (err, result) => {
                 if (err) return reject(err);
                 resolve(result);
               });
@@ -267,19 +298,25 @@ function createUPnPClient(opts = {}) {
 
             const item = metadata?.['DIDL-Lite']?.item;
             if (item) {
-              renderer.cachedTrackInfo = {
-                title: item['dc:title'] || item.title || '',
-                artist: item['dc:creator'] || item['upnp:artist'] || '',
+              renderer.openHomeTrackInfo = {
+                title: item['dc:title'] || '',
+                artist: (Array.isArray(item['upnp:artist']) ? item['upnp:artist'][0] : item['upnp:artist']) || '',
                 album: item['upnp:album'] || '',
+                albumArtUri: item['upnp:albumArtURI'] || '',
+                genre: item['upnp:genre'] || '',
               };
-              log.info('Updated track info', { uuid, track: renderer.cachedTrackInfo.title });
+              log.info('Updated OpenHome track info', {
+                uuid,
+                track: renderer.openHomeTrackInfo.title,
+                hasArt: !!renderer.openHomeTrackInfo.albumArtUri
+              });
             }
           }
         }
       } catch (err) {
         // Log occasionally (max once per minute per device)
         if (!renderer.lastPollError || now - renderer.lastPollError > 60000) {
-          log.warn('Failed to poll track info', { uuid, name: renderer.info.name, error: err.message });
+          log.warn('Failed to poll OpenHome track info', { uuid, name: renderer.info.name, error: err.message });
           renderer.lastPollError = now;
         }
       }
@@ -330,11 +367,14 @@ function createUPnPClient(opts = {}) {
     const renderer = state.renderers.get(uuid);
     if (!renderer) return null;
 
+    // Use OpenHome track info if available
+    const track = renderer.openHomeTrackInfo || {};
+
     return {
       zone_id: uuid,
-      line1: renderer.info.name,
-      line2: '', // UPnP doesn't provide track info easily without polling
-      line3: '',
+      line1: track.title || renderer.info.name,
+      line2: track.artist || '',
+      line3: track.album || '',
       is_playing: renderer.info.state === 'playing',
       volume: renderer.info.volume,
       volume_type: 'number',
@@ -343,6 +383,7 @@ function createUPnPClient(opts = {}) {
       volume_step: 1,
       seek_position: null,
       length: null,
+      image_key: track.albumArtUri || null,  // Album art URL
     };
   }
 
