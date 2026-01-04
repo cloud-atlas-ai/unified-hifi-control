@@ -252,23 +252,20 @@ function createKnobRoutes({ bus, roon, knobs, logger }) {
 
   // GET /admin/status.json - Admin diagnostics
   router.get('/admin/status.json', (req, res) => {
-    // Use bus status (with prefixed zone IDs) instead of raw roon status
     const busStatus = bus.getStatus();
-    const roonStatus = busStatus.roon || roon.getStatus();
-
-    // Get zones and now playing from bus (all backends)
     const zones = bus.getZones();
     const nowPlaying = zones.map(z => bus.getNowPlaying(z.zone_id)).filter(np => np);
 
     res.json({
-      bridge: {
-        ...roonStatus,
-        zones,  // Override with all backend zones
-        now_playing: nowPlaying,  // Override with all backend now playing
+      zones,
+      now_playing: nowPlaying,
+      backends: busStatus,
+      bus: {
+        backends: Object.keys(busStatus),
+        zone_count: zones.length,
       },
       knobs: knobs.listKnobs(),
       debug: busDebug.getDebugInfo(),
-      bus: { backends: Object.keys(busStatus), zone_count: zones.length },
     });
   });
 

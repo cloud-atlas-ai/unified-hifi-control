@@ -52,7 +52,9 @@ const hqp = new HQPClient({
 // Create and configure bus
 const bus = createBus({ logger: createLogger('Bus') });
 
-const roonAdapter = new RoonAdapter(roon);
+const roonAdapter = new RoonAdapter(roon, {
+  onZonesChanged: () => bus.refreshZones('roon'),
+});
 bus.registerBackend('roon', roonAdapter);
 
 const upnpAdapter = new UPnPAdapter(upnp, {
