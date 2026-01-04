@@ -228,6 +228,7 @@ class LMSClient {
   async updatePlayers() {
     try {
       const players = await this.getPlayers();
+      const previousIds = new Set(this.players.keys());
 
       for (const player of players) {
         if (!player.connected) continue;
@@ -254,8 +255,13 @@ class LMSClient {
         }
       }
 
-      // Notify bus of zone changes
-      if (this.onZonesChanged) {
+      // Only notify bus if player set changed (not on every poll)
+      const currentIds = new Set(this.players.keys());
+      const setChanged = previousIds.size !== currentIds.size ||
+        [...previousIds].some(id => !currentIds.has(id)) ||
+        [...currentIds].some(id => !previousIds.has(id));
+
+      if (setChanged && this.onZonesChanged) {
         this.onZonesChanged();
       }
     } catch (err) {
