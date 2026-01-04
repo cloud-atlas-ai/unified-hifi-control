@@ -281,6 +281,13 @@ function createUPnPClient(opts = {}) {
       throw new Error('Renderer not found');
     }
 
+    // Create client lazily on first control
+    if (!renderer.client) {
+      renderer.client = new MediaRendererClient(renderer.location);
+      setupRendererListeners(uuid, renderer.client);
+      log.info('Created MediaRenderer client for control', { uuid, name: renderer.info.name });
+    }
+
     const client = renderer.client;
 
     switch (action) {
