@@ -303,7 +303,7 @@ function createUPnPClient(opts = {}) {
         });
 
         if (volumeInfo.Value !== undefined) {
-          renderer.info.volume = volumeInfo.Value;
+          renderer.info.volume = Number(volumeInfo.Value);
         }
 
         // Query OpenHome Info:Track service
