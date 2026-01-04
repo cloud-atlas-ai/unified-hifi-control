@@ -222,6 +222,70 @@ function createUPnPClient(opts = {}) {
     }
   }
 
+  async function pollTrackInfo() {
+    const now = Date.now();
+    
+    for (const [uuid, renderer] of state.renderers.entries()) {
+      // Only poll playing devices
+      if (renderer.info.state !== 'playing') {
+        continue;
+      }
+
+      // Rate limit: max once per 5 seconds per device
+      if (renderer.lastTrackPoll && now - renderer.lastTrackPoll < 5000) {
+        continue;
+      }
+      renderer.lastTrackPoll = now;
+
+      // Reuse device client
+      if (!renderer.deviceClient) {
+        renderer.deviceClient = new DeviceClient(renderer.location);
+      }
+
+      try {
+        const positionInfo = await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('Timeout')), 3000);
+          renderer.deviceClient.callAction('AVTransport', 'GetPositionInfo', { InstanceID: 0 }, (err, result) => {
+            clearTimeout(timeout);
+            if (err) return reject(err);
+            resolve(result);
+          });
+        });
+
+        // Only parse if track URI changed
+        const trackURI = positionInfo.TrackURI;
+        if (trackURI && trackURI !== renderer.lastTrackURI) {
+          renderer.lastTrackURI = trackURI;
+          
+          if (positionInfo.TrackMetaData && positionInfo.TrackMetaData !== 'NOT_IMPLEMENTED') {
+            const metadata = await new Promise((resolve, reject) => {
+              parseString(positionInfo.TrackMetaData, { explicitArray: false, trim: true }, (err, result) => {
+                if (err) return reject(err);
+                resolve(result);
+              });
+            });
+
+            const item = metadata?.['DIDL-Lite']?.item;
+            if (item) {
+              renderer.cachedTrackInfo = {
+                title: item['dc:title'] || item.title || '',
+                artist: item['dc:creator'] || item['upnp:artist'] || '',
+                album: item['upnp:album'] || '',
+              };
+              log.info('Updated track info', { uuid, track: renderer.cachedTrackInfo.title });
+            }
+          }
+        }
+      } catch (err) {
+        // Log occasionally (max once per minute per device)
+        if (!renderer.lastPollError || now - renderer.lastPollError > 60000) {
+          log.warn('Failed to poll track info', { uuid, name: renderer.info.name, error: err.message });
+          renderer.lastPollError = now;
+        }
+      }
+    }
+  }
+
   function cleanupStaleRenderers() {
     const now = Date.now();
     const staleThreshold = SSDP_SEARCH_INTERVAL_MS * 3; // 3 missed searches
