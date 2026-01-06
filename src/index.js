@@ -11,6 +11,7 @@ const { loadAppSettings } = require('./lib/settings');
 const { advertise } = require('./lib/mdns');
 const { createKnobsStore } = require('./knobs/store');
 const { createBus } = require('./bus');
+const { createFirmwareService } = require('./firmware');
 const { RoonAdapter } = require('./bus/adapters/roon');
 const { UPnPAdapter } = require('./bus/adapters/upnp');
 const { OpenHomeAdapter } = require('./bus/adapters/openhome');
@@ -140,9 +141,15 @@ if (process.env.HQP_HOST) {
   log.info('HQPlayer pre-configured from environment', { host: process.env.HQP_HOST });
 }
 
+// Create firmware service for automatic update polling
+const firmwareService = createFirmwareService({
+  logger: createLogger('Firmware'),
+});
+
 // Create MQTT service (opt-in via MQTT_BROKER env var)
 const mqttService = createMqttService({
   hqp,
+  firmware: firmwareService,
   logger: createLogger('MQTT'),
 });
 
@@ -160,6 +167,7 @@ const app = createApp({
 // Start services
 bus.start();  // Starts all registered backends (including roon)
 mqttService.connect();
+firmwareService.start();  // Start polling for firmware updates
 
 let mdnsService;
 
@@ -180,6 +188,7 @@ app.listen(PORT, () => {
 process.on('SIGTERM', async () => {
   log.info('Shutting down...');
   if (mdnsService) mdnsService.stop();
+  firmwareService.stop();
   mqttService.disconnect();
   await bus.stop();
   process.exit(0);

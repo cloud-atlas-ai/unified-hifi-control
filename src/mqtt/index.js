@@ -3,11 +3,12 @@ const mqtt = require('mqtt');
 const DEFAULT_TOPIC_PREFIX = 'unified-hifi';
 const PUBLISH_INTERVAL_MS = 5000; // Publish state every 5 seconds when connected
 
-function createMqttService({ hqp, logger } = {}) {
+function createMqttService({ hqp, firmware, logger } = {}) {
   const log = logger || console;
   let client = null;
   let publishTimer = null;
   let topicPrefix = DEFAULT_TOPIC_PREFIX;
+  let firmwareUnsubscribe = null;
 
   function isEnabled() {
     return !!process.env.MQTT_BROKER;
@@ -69,6 +70,15 @@ function createMqttService({ hqp, logger } = {}) {
 
       // Publish discovery config for Home Assistant (includes selects with options)
       await publishHADiscovery();
+
+      // Subscribe to firmware events
+      if (firmware) {
+        firmwareUnsubscribe = firmware.on('firmware_downloaded', (data) => {
+          publishFirmwareUpdate(data);
+        });
+        // Publish current firmware status
+        publishFirmwareStatus();
+      }
     });
 
     client.on('error', (err) => {
@@ -568,13 +578,78 @@ function createMqttService({ hqp, logger } = {}) {
       // State is synced by publishHqpState() using configName
     }
 
+    // Firmware version sensor
+    if (firmware) {
+      const firmwareSensor = {
+        name: 'Knob Firmware Version',
+        unique_id: 'unified_hifi_knob_firmware',
+        state_topic: `${topicPrefix}/firmware/version`,
+        icon: 'mdi:chip',
+      };
+
+      client.publish(
+        'homeassistant/sensor/unified_hifi_knob_firmware/config',
+        JSON.stringify(firmwareSensor),
+        { retain: true }
+      );
+    }
+
     log.info('Published Home Assistant MQTT discovery configs');
+  }
+
+  function publishFirmwareStatus() {
+    if (!client || !client.connected || !firmware) return;
+
+    const status = firmware.getStatus();
+    client.publish(
+      `${topicPrefix}/firmware/status`,
+      JSON.stringify(status),
+      { retain: true }
+    );
+
+    if (status.currentVersion) {
+      client.publish(
+        `${topicPrefix}/firmware/version`,
+        status.currentVersion,
+        { retain: true }
+      );
+    }
+
+    log.debug('Published firmware status to MQTT', { version: status.currentVersion });
+  }
+
+  function publishFirmwareUpdate(data) {
+    if (!client || !client.connected) return;
+
+    client.publish(
+      `${topicPrefix}/firmware/available`,
+      JSON.stringify({
+        version: data.version,
+        size: data.size,
+        releaseUrl: data.releaseUrl,
+        timestamp: Date.now()
+      }),
+      { retain: true }
+    );
+
+    // Also update the version topic
+    client.publish(
+      `${topicPrefix}/firmware/version`,
+      data.version,
+      { retain: true }
+    );
+
+    log.info('Published firmware update to MQTT', { version: data.version });
   }
 
   function disconnect() {
     if (publishTimer) {
       clearInterval(publishTimer);
       publishTimer = null;
+    }
+    if (firmwareUnsubscribe) {
+      firmwareUnsubscribe();
+      firmwareUnsubscribe = null;
     }
     if (client) {
       client.end();
