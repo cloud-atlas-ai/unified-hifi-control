@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const DEFAULT_POLL_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const REQUEST_TIMEOUT_MS = 30000; // 30 seconds
 
 /**
  * FirmwareService - Polls GitHub for new firmware releases and notifies via bus
@@ -12,6 +13,7 @@ function createFirmwareService({ logger, pollIntervalMs } = {}) {
   let pollTimer = null;
   let lastKnownVersion = null;
   let isStarted = false;
+  let checkInProgress = false;
   const eventListeners = [];
 
   // Config from environment
@@ -64,16 +66,19 @@ function createFirmwareService({ logger, pollIntervalMs } = {}) {
    */
   async function fetchLatestRelease() {
     return new Promise((resolve, reject) => {
+      let settled = false;
       const options = {
         hostname: 'api.github.com',
         path: `/repos/${GITHUB_REPO}/releases/latest`,
         headers: { 'User-Agent': 'unified-hifi-control' }
       };
 
-      https.get(options, (response) => {
+      const req = https.get(options, (response) => {
         let data = '';
         response.on('data', chunk => data += chunk);
         response.on('end', () => {
+          if (settled) return;
+          settled = true;
           if (response.statusCode === 200) {
             try {
               resolve(JSON.parse(data));
@@ -82,11 +87,26 @@ function createFirmwareService({ logger, pollIntervalMs } = {}) {
             }
           } else if (response.statusCode === 404) {
             resolve(null); // No releases yet
+          } else if (response.statusCode === 403) {
+            reject(new Error('GitHub API rate limit exceeded'));
           } else {
             reject(new Error(`GitHub API error: ${response.statusCode}`));
           }
         });
-      }).on('error', reject);
+      });
+
+      req.on('error', (err) => {
+        if (settled) return;
+        settled = true;
+        reject(err);
+      });
+
+      req.setTimeout(REQUEST_TIMEOUT_MS, () => {
+        if (settled) return;
+        settled = true;
+        req.destroy();
+        reject(new Error('GitHub API request timed out'));
+      });
     });
   }
 
@@ -108,15 +128,39 @@ function createFirmwareService({ logger, pollIntervalMs } = {}) {
 
     await new Promise((resolve, reject) => {
       const MAX_REDIRECTS = 5;
+      const DOWNLOAD_TIMEOUT_MS = 120000; // 2 minutes for download
       let redirectCount = 0;
+      let settled = false;
+      let currentReq = null;
+
+      const cleanup = () => {
+        if (currentReq) {
+          currentReq.destroy();
+          currentReq = null;
+        }
+        try {
+          file.close();
+          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      };
+
+      file.on('error', (err) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new Error(`File write error: ${err.message}`));
+      });
 
       const download = (url) => {
-        https.get(url, (response) => {
+        currentReq = https.get(url, (response) => {
           if (response.statusCode === 302 || response.statusCode === 301) {
             redirectCount++;
             if (redirectCount > MAX_REDIRECTS) {
-              file.close();
-              fs.unlinkSync(tempPath);
+              if (settled) return;
+              settled = true;
+              cleanup();
               reject(new Error('Too many redirects'));
               return;
             }
@@ -125,24 +169,38 @@ function createFirmwareService({ logger, pollIntervalMs } = {}) {
             return;
           }
           if (response.statusCode !== 200) {
-            file.close();
-            fs.unlinkSync(tempPath);
+            if (settled) return;
+            settled = true;
+            cleanup();
             reject(new Error(`Download failed: ${response.statusCode}`));
             return;
           }
           response.pipe(file);
           file.on('finish', () => {
+            if (settled) return;
+            settled = true;
             file.close();
             // Rename temp to final on success
             fs.renameSync(tempPath, firmwarePath);
             resolve();
           });
-        }).on('error', (err) => {
-          file.close();
-          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        });
+
+        currentReq.on('error', (err) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
           reject(err);
         });
+
+        currentReq.setTimeout(DOWNLOAD_TIMEOUT_MS, () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(new Error('Download timed out'));
+        });
       };
+
       download(downloadUrl);
     });
 
@@ -162,13 +220,16 @@ function createFirmwareService({ logger, pollIntervalMs } = {}) {
 
   /**
    * Compare semver versions: returns true if remote > local
+   * Handles pre-release suffixes (e.g., 1.0.0-beta) by stripping them
    */
   function isNewerVersion(remoteVersion, localVersion) {
     if (!localVersion) return true;
     if (!remoteVersion) return false;
 
-    const remote = remoteVersion.replace(/^v/, '').split('.').map(Number);
-    const local = localVersion.replace(/^v/, '').split('.').map(Number);
+    // Strip leading 'v' and any pre-release suffix for comparison
+    const parseVersion = (v) => v.replace(/^v/, '').split('-')[0].split('.').map(n => parseInt(n, 10) || 0);
+    const remote = parseVersion(remoteVersion);
+    const local = parseVersion(localVersion);
 
     for (let i = 0; i < 3; i++) {
       const r = remote[i] || 0;
@@ -193,7 +254,9 @@ function createFirmwareService({ logger, pollIntervalMs } = {}) {
 
       const latestVersion = releaseData.tag_name.replace(/^v/, '');
       const currentVersion = getCurrentVersion();
-      const asset = releaseData.assets.find(a => a.name === 'roon_knob.bin');
+      // Guard against undefined assets array
+      const assets = Array.isArray(releaseData.assets) ? releaseData.assets : [];
+      const asset = assets.find(a => a.name === 'roon_knob.bin');
 
       const status = {
         currentVersion,
@@ -229,6 +292,8 @@ function createFirmwareService({ logger, pollIntervalMs } = {}) {
             releaseUrl: releaseData.html_url
           });
         }
+      } else if (status.updateAvailable && !asset) {
+        log.warn('New version available but no firmware binary found', { version: latestVersion });
       } else {
         log.debug('Firmware is up to date', { version: currentVersion });
       }
@@ -242,6 +307,24 @@ function createFirmwareService({ logger, pollIntervalMs } = {}) {
         currentVersion: getCurrentVersion(),
         timestamp: Date.now()
       };
+    }
+  }
+
+  /**
+   * Run check with guard against overlapping calls
+   */
+  async function runCheck() {
+    if (checkInProgress) {
+      log.debug('Skipping firmware check, previous check still in progress');
+      return;
+    }
+    checkInProgress = true;
+    try {
+      await checkForUpdates();
+    } catch (err) {
+      log.error('Firmware check failed', { error: err.message });
+    } finally {
+      checkInProgress = false;
     }
   }
 
@@ -262,15 +345,11 @@ function createFirmwareService({ logger, pollIntervalMs } = {}) {
     });
 
     // Check immediately on start
-    checkForUpdates().catch(err => {
-      log.error('Initial firmware check failed', { error: err.message });
-    });
+    runCheck();
 
     // Then poll at interval
     pollTimer = setInterval(() => {
-      checkForUpdates().catch(err => {
-        log.error('Periodic firmware check failed', { error: err.message });
-      });
+      runCheck();
     }, POLL_INTERVAL);
   }
 
