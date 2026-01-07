@@ -1,7 +1,7 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
-const { MAX_REDIRECTS } = require('./lib/constants');
+const { MAX_REDIRECTS } = require('../lib/constants');
 
 const DEFAULT_POLL_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 const REQUEST_TIMEOUT_MS = 30000; // 30 seconds
