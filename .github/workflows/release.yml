@@ -171,9 +171,51 @@ jobs:
           path: dist/lms-unified-hifi-control-*.zip
           retention-days: 5
 
+  build-nas-packages:
+    name: Build NAS Packages (Synology/QNAP)
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: dist/bin/
+
+      - name: Make binaries executable
+        run: chmod +x dist/bin/*
+
+      - name: Build NAS packages
+        run: npm run build:nas
+
+      - name: Upload Synology packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: synology-packages
+          path: dist/installers/*.spk
+          retention-days: 5
+
+      - name: Upload QNAP packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: qnap-packages
+          path: dist/installers/*.qpkg
+          retention-days: 5
+
   upload-release:
     name: Upload to Release
-    needs: [build-macos, build-windows, build-linux, build-lms-plugin]
+    needs: [build-macos, build-windows, build-linux, build-lms-plugin, build-nas-packages]
     runs-on: ubuntu-latest
     if: github.event_name == 'release'
     permissions:
@@ -196,3 +238,5 @@ jobs:
             artifacts/linux-packages/*.deb
             artifacts/linux-packages/*.rpm
             artifacts/lms-plugin/*.zip
+            artifacts/synology-packages/*.spk
+            artifacts/qnap-packages/*.qpkg
