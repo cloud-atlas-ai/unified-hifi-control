@@ -85,17 +85,22 @@ Backend-specific methods (HQP pipeline, Roon grouping) remain on adapters as ext
 
 ## Key Design Decisions
 
-### 1. Overlapping Zones
+### 1. Zone Enrichment (HQPlayer as DSP Service)
 
-Zones are NOT 1:1 with physical outputs. Multiple backends can expose the same physical device:
+**Status:** Implemented as of 2026-01-08
 
-**Example:** Roon zone outputting to HQPlayer
-- `roon:living_room` - Roon zone (playback control, metadata)
-- `hqp:main` - HQPlayer zone (DSP control, pipeline state) - can have multiple instances
+HQPlayer is NOT a zone backend - it's a DSP service that enriches primary zones:
 
-Both represent the same audio output, different control surfaces.
+**Example:** Roon zone with HQPlayer DSP processing
+- `roon:living_room` - Primary zone (playback control, metadata)
+  - Linked to HQPlayer instance "embedded"
+  - `backend_data.hqp` contains pipeline info (filter, sample rate, etc.)
 
-**Implementation:** Zone registry tracks linkages. UI can show combined view (Roon playback + HQP DSP on same card).
+**Implementation:**
+- `HQPService` manages zone→instance mappings (persisted in settings)
+- `bus.getNowPlaying()` enriches zones with HQP pipeline data asynchronously
+- HQPlayer adapter exists but `getZones()` returns `[]` (no standalone zones)
+- Multi-instance support: Multiple HQPlayer instances (Embedded + Desktop) can be linked to different zones
 
 ### 2. Backend-Native Event Handling
 
