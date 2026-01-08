@@ -5,7 +5,7 @@
   <?define ProductName = "Unified Hi-Fi Control" ?>
   <?define ProductVersion = "$(var.Version)" ?>
   <?define ProductManufacturer = "Cloud Atlas" ?>
-  <?define UpgradeCode = "A1B2C3D4-E5F6-7890-ABCD-EF1234567890" ?>
+  <?define UpgradeCode = "F8E7D6C5-B4A3-4281-9060-504030201000" ?>
 
   <Product Id="*"
            Name="$(var.ProductName)"
@@ -121,9 +121,10 @@
     </Feature>
 
     <!-- Custom Actions -->
+    <!-- Delay before opening browser to allow service to start -->
     <CustomAction Id="OpenWebUI"
                   Directory="INSTALLFOLDER"
-                  ExeCommand="cmd.exe /c start http://localhost:8088"
+                  ExeCommand="cmd.exe /c timeout /t 3 /nobreak &gt; nul &amp;&amp; start http://localhost:8088"
                   Return="asyncNoWait" />
 
     <InstallExecuteSequence>

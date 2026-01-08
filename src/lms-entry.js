@@ -81,6 +81,16 @@ function extractKnob(req) {
   return { id: headerId, version };
 }
 
+// Validate firmware filename to prevent path traversal
+function sanitizeFirmwareFilename(filename) {
+  if (!filename || typeof filename !== 'string') return 'roon_knob.bin';
+  // Remove any path separators and parent directory references
+  const sanitized = path.basename(filename);
+  // Only allow alphanumeric, dots, hyphens, underscores
+  if (!/^[\w.-]+$/.test(sanitized)) return 'roon_knob.bin';
+  return sanitized;
+}
+
 // HTTP API - compatible with knob/phone/watch clients
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -387,7 +397,8 @@ const server = http.createServer(async (req, res) => {
       }
 
       const versionData = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
-      const firmwarePath = path.join(FIRMWARE_DIR, versionData.file || 'roon_knob.bin');
+      const firmwareFile = sanitizeFirmwareFilename(versionData.file);
+      const firmwarePath = path.join(FIRMWARE_DIR, firmwareFile);
 
       if (!fs.existsSync(firmwarePath)) {
         res.statusCode = 404;
@@ -401,7 +412,7 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({
         version: versionData.version,
         size: stats.size,
-        file: versionData.file || 'roon_knob.bin',
+        file: firmwareFile,
       }));
       return;
     }
@@ -422,7 +433,7 @@ const server = http.createServer(async (req, res) => {
       const versionFile = path.join(FIRMWARE_DIR, 'version.json');
       if (fs.existsSync(versionFile)) {
         const versionData = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
-        firmwareFile = versionData.file || firmwareFile;
+        firmwareFile = sanitizeFirmwareFilename(versionData.file);
       }
 
       const firmwarePath = path.join(FIRMWARE_DIR, firmwareFile);

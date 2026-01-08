@@ -5,6 +5,12 @@
     <key>Label</key>
     <string>com.cloudatlas.unified-hifi-control</string>
 
+    <!-- Run as non-root user for security -->
+    <key>UserName</key>
+    <string>_www</string>
+    <key>GroupName</key>
+    <string>_www</string>
+
     <key>ProgramArguments</key>
     <array>
         <string>/usr/local/bin/unified-hifi-control</string>
