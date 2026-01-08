@@ -18,6 +18,14 @@ module.exports = [
     },
   },
   {
+    files: ['**/*.test.js', '**/*.spec.js'],
+    languageOptions: {
+      globals: {
+        ...globals.jest,
+      },
+    },
+  },
+  {
     ignores: ['node_modules/**', 'data/**', '**/*.log', '.superego/**'],
   },
 ];
