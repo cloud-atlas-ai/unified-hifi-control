@@ -25,7 +25,13 @@ sub page {
 }
 
 sub prefs {
-    return ($prefs, qw(autorun port bin loglevel));
+    return ($prefs, qw(
+        autorun port bin loglevel
+        knob_name
+        knob_rotation_charging knob_rotation_battery
+        knob_art_mode_charging knob_dim_charging knob_sleep_charging
+        knob_art_mode_battery knob_dim_battery knob_sleep_battery
+    ));
 }
 
 sub handler {
@@ -61,6 +67,20 @@ sub handler {
         $prefs->set('bin',      $newBin) if $newBin;
         $prefs->set('loglevel', $params->{'pref_loglevel'} || 'info');
 
+        # Save knob config
+        $prefs->set('knob_name',              $params->{'pref_knob_name'} || '');
+        $prefs->set('knob_rotation_charging', int($params->{'pref_knob_rotation_charging'} || 180));
+        $prefs->set('knob_rotation_battery',  int($params->{'pref_knob_rotation_battery'} || 0));
+        $prefs->set('knob_art_mode_charging', int($params->{'pref_knob_art_mode_charging'} // 60));
+        $prefs->set('knob_dim_charging',      int($params->{'pref_knob_dim_charging'} // 120));
+        $prefs->set('knob_sleep_charging',    int($params->{'pref_knob_sleep_charging'} // 0));
+        $prefs->set('knob_art_mode_battery',  int($params->{'pref_knob_art_mode_battery'} // 30));
+        $prefs->set('knob_dim_battery',       int($params->{'pref_knob_dim_battery'} // 30));
+        $prefs->set('knob_sleep_battery',     int($params->{'pref_knob_sleep_battery'} // 60));
+
+        # Write knob config file for binary to read
+        Plugins::UnifiedHiFi::Helper->writeKnobConfig();
+
         # Restart if running and settings changed
         if ($needsRestart && Plugins::UnifiedHiFi::Helper->running()) {
             $log->info("Settings changed, restarting helper");
@@ -80,6 +100,10 @@ sub beforeRender {
     $params->{'webUrl'}     = Plugins::UnifiedHiFi::Helper->webUrl();
     $params->{'binaries'}   = [Plugins::UnifiedHiFi::Helper->binaries()];
     $params->{'loglevels'}  = ['error', 'warn', 'info', 'debug'];
+    $params->{'rotations'}  = [0, 90, 180, 270];
+
+    # Knob status from helper
+    $params->{'knobStatus'} = Plugins::UnifiedHiFi::Helper->knobStatus();
 
     return $class->SUPER::beforeRender($params, $client);
 }

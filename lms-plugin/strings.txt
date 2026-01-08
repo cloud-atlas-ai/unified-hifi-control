@@ -39,3 +39,33 @@ PLUGIN_UNIFIED_HIFI_LOGLEVEL_DESC
 
 PLUGIN_UNIFIED_HIFI_STATUS
 	EN	Status
+
+PLUGIN_UNIFIED_HIFI_KNOB
+	EN	Knob Configuration
+
+PLUGIN_UNIFIED_HIFI_KNOB_DESC
+	EN	Configure your ESP32 hardware knob display and power management settings.
+
+PLUGIN_UNIFIED_HIFI_KNOB_NAME
+	EN	Knob name
+
+PLUGIN_UNIFIED_HIFI_KNOB_NAME_DESC
+	EN	A friendly name for your knob (for identification).
+
+PLUGIN_UNIFIED_HIFI_KNOB_ROTATION
+	EN	Display rotation
+
+PLUGIN_UNIFIED_HIFI_KNOB_ROTATION_DESC
+	EN	Set the display orientation for when the knob is charging (on dock) vs on battery (handheld).
+
+PLUGIN_UNIFIED_HIFI_KNOB_POWER_CHARGING
+	EN	Power timers (charging)
+
+PLUGIN_UNIFIED_HIFI_KNOB_POWER_CHARGING_DESC
+	EN	Display dimming and sleep timers when the knob is charging. Set to 0 to disable.
+
+PLUGIN_UNIFIED_HIFI_KNOB_POWER_BATTERY
+	EN	Power timers (battery)
+
+PLUGIN_UNIFIED_HIFI_KNOB_POWER_BATTERY_DESC
+	EN	Display dimming and sleep timers when the knob is on battery. Set to 0 to disable.

@@ -6,7 +6,8 @@
  * - LMS client (for player status, artwork, control)
  * - Image processing (sharp for resizing)
  * - mDNS advertising (for client discovery)
- * - Knob config + firmware management
+ * - Single knob config (from LMS plugin settings)
+ * - Firmware management
  * - Unified API endpoints (/zones, /now_playing, /control, etc.)
  *
  * No web UI, no Roon/UPnP/OpenHome/HQPlayer.
@@ -15,17 +16,17 @@
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const http = require('http');
-const https = require('https');
 const sharp = require('sharp');
 const { LMSClient } = require('./lms/client');
-const { KnobManager } = require('./knobs/manager');
 const { createLogger } = require('./lib/logger');
 const { advertise } = require('./lib/mdns');
 
 const PORT = parseInt(process.env.PORT, 10) || 9199;
 const CONFIG_DIR = process.env.CONFIG_DIR || path.join(__dirname, '..', 'data');
 const FIRMWARE_DIR = process.env.FIRMWARE_DIR || path.join(CONFIG_DIR, 'firmware');
+const KNOB_CONFIG_FILE = path.join(CONFIG_DIR, 'knob_config.json');
 const log = createLogger('LMS-Plugin');
 
 log.info('Starting Unified Hi-Fi Control (LMS Plugin Mode)');
@@ -37,11 +38,40 @@ const lms = new LMSClient({
   logger: createLogger('LMS'),
 });
 
-// Knob manager for config storage
-const knobs = new KnobManager({
-  configDir: CONFIG_DIR,
-  logger: createLogger('Knobs'),
-});
+// Single knob state (LMS plugin mode only supports one knob)
+let knobState = {
+  id: null,
+  version: null,
+  last_seen: null,
+  status: { battery_level: null, battery_charging: null, zone_id: null, ip: null },
+};
+
+// Load knob config from file (written by LMS plugin Settings.pm)
+function loadKnobConfig() {
+  try {
+    if (fs.existsSync(KNOB_CONFIG_FILE)) {
+      return JSON.parse(fs.readFileSync(KNOB_CONFIG_FILE, 'utf8'));
+    }
+  } catch (e) {
+    log.warn('Failed to load knob config', { error: e.message });
+  }
+  // Return defaults matching firmware defaults
+  return {
+    name: '',
+    rotation_charging: 180,
+    rotation_not_charging: 0,
+    art_mode_charging: { enabled: true, timeout_sec: 60 },
+    dim_charging: { enabled: true, timeout_sec: 120 },
+    sleep_charging: { enabled: false, timeout_sec: 0 },
+    art_mode_battery: { enabled: true, timeout_sec: 30 },
+    dim_battery: { enabled: true, timeout_sec: 30 },
+    sleep_battery: { enabled: true, timeout_sec: 60 },
+  };
+}
+
+function computeConfigSha(config) {
+  return crypto.createHash('sha256').update(JSON.stringify(config)).digest('hex').substring(0, 8);
+}
 
 // Extract knob info from request headers
 function extractKnob(req) {
@@ -105,15 +135,17 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // Update knob status
+      // Update knob status (single knob mode)
       if (knob?.id) {
-        if (knob.version) knobs.getOrCreateKnob(knob.id, knob.version);
-        const statusUpdates = { zone_id: zoneId, ip: req.socket.remoteAddress };
+        knobState.id = knob.id;
+        knobState.version = knob.version || knobState.version;
+        knobState.last_seen = new Date().toISOString();
+        knobState.status.zone_id = zoneId;
+        knobState.status.ip = req.socket.remoteAddress;
         const batteryLevel = url.searchParams.get('battery_level');
         const batteryCharging = url.searchParams.get('battery_charging');
-        if (batteryLevel) statusUpdates.battery_level = parseInt(batteryLevel, 10);
-        if (batteryCharging !== null) statusUpdates.battery_charging = batteryCharging === '1' || batteryCharging === 'true';
-        knobs.updateKnobStatus(knob.id, statusUpdates);
+        if (batteryLevel) knobState.status.battery_level = parseInt(batteryLevel, 10);
+        if (batteryCharging !== null) knobState.status.battery_charging = batteryCharging === '1' || batteryCharging === 'true';
       }
 
       const playerId = zoneId.replace(/^lms:/, '');
@@ -145,7 +177,8 @@ const server = http.createServer(async (req, res) => {
       }));
 
       if (knob?.id) {
-        response.config_sha = knobs.getConfigSha(knob.id);
+        const config = loadKnobConfig();
+        response.config_sha = computeConfigSha(config);
       }
 
       res.end(JSON.stringify(response));
@@ -282,40 +315,53 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // GET /config/:knob_id - Get knob configuration
+    // GET /config/:knob_id - Get knob configuration (single knob mode - ignores ID)
     const configMatch = pathname.match(/^\/config\/([^/]+)$/);
     if (configMatch && req.method === 'GET') {
       const knobId = decodeURIComponent(configMatch[1]);
       const version = req.headers['x-knob-version'];
-      const knob = knobs.getOrCreateKnob(knobId, version);
 
+      // Update state if this is a new knob
+      if (knobId && !knobState.id) {
+        knobState.id = knobId;
+        knobState.version = version;
+        knobState.last_seen = new Date().toISOString();
+      }
+
+      const config = loadKnobConfig();
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({
-        config: { knob_id: knobId, ...knob.config, name: knob.name },
-        config_sha: knob.config_sha,
+        config: { knob_id: knobId, ...config },
+        config_sha: computeConfigSha(config),
       }));
       return;
     }
 
-    // PUT /config/:knob_id - Update knob configuration
+    // PUT /config/:knob_id - Update knob configuration (read-only in LMS mode, config via LMS Settings)
     if (configMatch && req.method === 'PUT') {
-      const knobId = decodeURIComponent(configMatch[1]);
-      const body = await readBody(req);
-      const updates = JSON.parse(body);
-      const knob = knobs.updateKnobConfig(knobId, updates);
-
       res.setHeader('Content-Type', 'application/json');
+      res.statusCode = 400;
       res.end(JSON.stringify({
-        config: { knob_id: knobId, ...knob.config, name: knob.name },
-        config_sha: knob.config_sha,
+        error: 'Config is managed via LMS plugin settings. Update configuration in the LMS web interface.',
       }));
       return;
     }
 
-    // GET /api/knobs - List all known knobs
+    // GET /api/knobs - List known knob (single knob mode)
     if (pathname === '/api/knobs') {
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ knobs: knobs.listKnobs() }));
+      const knobsList = [];
+      if (knobState.id) {
+        const config = loadKnobConfig();
+        knobsList.push({
+          knob_id: knobState.id,
+          name: config.name || '',
+          last_seen: knobState.last_seen,
+          version: knobState.version,
+          status: knobState.status,
+        });
+      }
+      res.end(JSON.stringify({ knobs: knobsList }));
       return;
     }
 
