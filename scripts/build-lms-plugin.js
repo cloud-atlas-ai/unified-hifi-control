@@ -23,13 +23,14 @@ const PKG_JSON = require(path.join(ROOT, 'package.json'));
 
 const VERSION = PKG_JSON.version;
 
-// Binary mappings for LMS plugin
+// Binary mappings for LMS plugin (use minimal LMS-specific binaries)
+// These are built from src/lms-entry.js - smaller, no web UI, HQPlayer only
 const BINARY_MAP = [
-  { src: 'unified-hifi-linux-x64', dest: 'unified-hifi-linux-x86_64' },
-  { src: 'unified-hifi-linux-arm64', dest: 'unified-hifi-linux-aarch64' },
-  { src: 'unified-hifi-macos-x64', dest: 'unified-hifi-darwin-x86_64' },
-  { src: 'unified-hifi-macos-arm64', dest: 'unified-hifi-darwin-arm64' },
-  { src: 'unified-hifi-win-x64.exe', dest: 'unified-hifi-win64.exe' },
+  { src: 'unified-hifi-lms-linux-x64', dest: 'unified-hifi-linux-x86_64' },
+  { src: 'unified-hifi-lms-linux-arm64', dest: 'unified-hifi-linux-aarch64' },
+  { src: 'unified-hifi-lms-macos-x64', dest: 'unified-hifi-darwin-x86_64' },
+  { src: 'unified-hifi-lms-macos-arm64', dest: 'unified-hifi-darwin-arm64' },
+  { src: 'unified-hifi-lms-win-x64.exe', dest: 'unified-hifi-win64.exe' },
 ];
 
 async function main() {
