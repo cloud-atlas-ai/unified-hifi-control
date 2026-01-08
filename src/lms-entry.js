@@ -4,19 +4,17 @@
  *
  * Stripped version that only includes:
  * - LMS client (for player status, artwork, control)
- * - HQPlayer client (for DSP control)
  * - Image processing (sharp for resizing)
  * - mDNS advertising (for client discovery)
  * - Unified API endpoints (/zones, /now_playing, /control, etc.)
  *
- * No web UI, no Roon/UPnP/OpenHome adapters.
+ * No web UI, no Roon/UPnP/OpenHome/HQPlayer.
  */
 
 const os = require('os');
 const http = require('http');
 const sharp = require('sharp');
 const { LMSClient } = require('./lms/client');
-const { HQPClient } = require('./hqplayer/client');
 const { createLogger } = require('./lib/logger');
 const { advertise } = require('./lib/mdns');
 
@@ -31,22 +29,6 @@ const lms = new LMSClient({
   port: parseInt(process.env.LMS_PORT, 10) || 9000,
   logger: createLogger('LMS'),
 });
-
-// Create HQPlayer client
-const hqp = new HQPClient({
-  logger: createLogger('HQP'),
-});
-
-// Pre-configure HQPlayer if env vars set
-if (process.env.HQP_HOST) {
-  hqp.configure({
-    host: process.env.HQP_HOST,
-    port: process.env.HQP_PORT || 8088,
-    username: process.env.HQP_USER,
-    password: process.env.HQP_PASS,
-  });
-  log.info('HQPlayer configured', { host: process.env.HQP_HOST });
-}
 
 // HTTP API - compatible with knob/phone/watch clients
 const server = http.createServer(async (req, res) => {
@@ -264,37 +246,6 @@ const server = http.createServer(async (req, res) => {
       }
 
       res.end(JSON.stringify({ status: 'ok' }));
-      return;
-    }
-
-    // HQPlayer endpoints
-    if (path === '/hqp/status') {
-      res.setHeader('Content-Type', 'application/json');
-      const status = await hqp.getStatus();
-      res.end(JSON.stringify(status));
-      return;
-    }
-
-    if (path === '/hqp/configure' && req.method === 'POST') {
-      res.setHeader('Content-Type', 'application/json');
-      const body = await readBody(req);
-      const config = JSON.parse(body);
-      hqp.configure(config);
-      res.end(JSON.stringify({ success: true }));
-      return;
-    }
-
-    if (path === '/hqp/pipeline') {
-      res.setHeader('Content-Type', 'application/json');
-      if (req.method === 'GET') {
-        const pipeline = await hqp.fetchPipeline();
-        res.end(JSON.stringify({ enabled: true, ...pipeline }));
-      } else if (req.method === 'POST') {
-        const body = await readBody(req);
-        const { setting, value } = JSON.parse(body);
-        await hqp.setPipelineSetting(setting, value);
-        res.end(JSON.stringify({ ok: true }));
-      }
       return;
     }
 
