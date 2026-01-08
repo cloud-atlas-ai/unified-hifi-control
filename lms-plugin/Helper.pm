@@ -8,6 +8,7 @@ use warnings;
 
 use File::Spec::Functions qw(catfile catdir);
 use Proc::Background;
+use JSON;
 
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
@@ -218,6 +219,79 @@ sub _resetRestarts {
 sub _pluginDataFor {
     my $key = shift;
     return Slim::Utils::PluginManager->dataForPlugin(__PACKAGE__)->{$key};
+}
+
+# Write knob configuration to JSON file for binary to read
+sub writeKnobConfig {
+    my $class = shift;
+
+    my $configDir = Slim::Utils::OSDetect::dirsFor('prefs');
+    my $configFile = catfile($configDir, 'knob_config.json');
+
+    my $config = {
+        name              => $prefs->get('knob_name') || '',
+        rotation_charging     => int($prefs->get('knob_rotation_charging') // 180),
+        rotation_not_charging => int($prefs->get('knob_rotation_battery') // 0),
+        art_mode_charging => {
+            enabled     => ($prefs->get('knob_art_mode_charging') // 60) > 0,
+            timeout_sec => int($prefs->get('knob_art_mode_charging') // 60),
+        },
+        dim_charging => {
+            enabled     => ($prefs->get('knob_dim_charging') // 120) > 0,
+            timeout_sec => int($prefs->get('knob_dim_charging') // 120),
+        },
+        sleep_charging => {
+            enabled     => ($prefs->get('knob_sleep_charging') // 0) > 0,
+            timeout_sec => int($prefs->get('knob_sleep_charging') // 0),
+        },
+        art_mode_battery => {
+            enabled     => ($prefs->get('knob_art_mode_battery') // 30) > 0,
+            timeout_sec => int($prefs->get('knob_art_mode_battery') // 30),
+        },
+        dim_battery => {
+            enabled     => ($prefs->get('knob_dim_battery') // 30) > 0,
+            timeout_sec => int($prefs->get('knob_dim_battery') // 30),
+        },
+        sleep_battery => {
+            enabled     => ($prefs->get('knob_sleep_battery') // 60) > 0,
+            timeout_sec => int($prefs->get('knob_sleep_battery') // 60),
+        },
+    };
+
+    eval {
+        open my $fh, '>', $configFile or die "Cannot write $configFile: $!";
+        print $fh encode_json($config);
+        close $fh;
+        $log->debug("Wrote knob config to $configFile");
+    };
+    if ($@) {
+        $log->error("Failed to write knob config: $@");
+    }
+}
+
+# Get knob status from running helper (if available)
+sub knobStatus {
+    my $class = shift;
+
+    return {} unless $class->running();
+
+    my $port = $prefs->get('port') || 8088;
+    my $url = "http://localhost:$port/api/knobs";
+
+    eval {
+        require LWP::UserAgent;
+        my $ua = LWP::UserAgent->new(timeout => 2);
+        my $response = $ua->get($url);
+        if ($response->is_success) {
+            my $data = decode_json($response->decoded_content);
+            # Return first knob status (single knob mode)
+            if ($data->{knobs} && @{$data->{knobs}}) {
+                return $data->{knobs}[0];
+            }
+        }
+    };
+
+    return {};
 }
 
 1;
