@@ -181,6 +181,45 @@ function createApp(opts = {}) {
     }
   });
 
+  app.post('/hqp/detect', async (req, res) => {
+    const { host } = req.body;
+    if (!host) {
+      return res.status(400).json({ error: 'host required' });
+    }
+
+    const { HQPClient } = require('../hqplayer/client');
+
+    // Create temporary client for detection (no credentials needed for native protocol)
+    const client = new HQPClient({
+      host,
+      logger: log,
+    });
+
+    try {
+      const status = await client.getStatus();
+
+      if (!status.connected) {
+        return res.json({
+          reachable: false,
+          error: status.error || 'Cannot reach HQPlayer at this address',
+        });
+      }
+
+      res.json({
+        reachable: true,
+        isEmbedded: status.isEmbedded || false,
+        product: status.product || 'Unknown',
+        version: status.version || null,
+      });
+    } catch (err) {
+      log.warn('HQP detect failed', { host, error: err.message });
+      res.json({
+        reachable: false,
+        error: err.message,
+      });
+    }
+  });
+
   app.post('/hqp/configure', async (req, res) => {
     const { host, port, username, password } = req.body;
     if (!host) {

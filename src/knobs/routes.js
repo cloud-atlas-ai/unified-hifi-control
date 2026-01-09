@@ -1134,11 +1134,19 @@ ${navHtml('hqp')}
   <button id="hqp-add-btn" onclick="showAddInstance()" style="margin-bottom:1em;">Add Instance</button>
   <div id="hqp-add-form" style="display:none;margin-bottom:1em;padding:1em;border:1px solid var(--border);border-radius:4px;background:var(--bg-elevated);">
     <h4 style="margin-top:0;">Add HQPlayer Instance</h4>
-    <p class="muted" style="margin:0.5em 0;font-size:0.9em;">Filter/shaper/rate control uses native protocol (port 4321). Web UI credentials are optional.</p>
-    <div class="form-row"><label>Host:</label><input type="text" id="hqp-add-host" placeholder="192.168.1.x"></div>
-    <div class="form-row"><label>Port (Web UI):</label><input type="text" id="hqp-add-port" value="8088"></div>
-    <div class="form-row"><label>Username:</label><input type="text" id="hqp-add-username" placeholder="(optional)"></div>
-    <div class="form-row"><label>Password:</label><input type="password" id="hqp-add-password"></div>
+    <p class="muted" style="margin:0.5em 0;font-size:0.9em;">Filter/shaper/rate control uses native protocol (port 4321).</p>
+    <div class="form-row">
+      <label>Host:</label>
+      <input type="text" id="hqp-add-host" placeholder="192.168.1.x" onblur="detectHqpType()">
+      <button type="button" onclick="detectHqpType()" style="margin-left:0.5em;padding:0.3em 0.6em;">Test</button>
+    </div>
+    <div id="hqp-add-type-msg" class="muted" style="margin:0.5em 0;font-size:0.9em;"></div>
+    <div id="hqp-add-credentials" style="display:none;">
+      <p class="muted" style="margin:0.5em 0;font-size:0.9em;">Web UI credentials (required for Embedded profile switching):</p>
+      <div class="form-row"><label>Port (Web UI):</label><input type="text" id="hqp-add-port" value="8088"></div>
+      <div class="form-row"><label>Username:</label><input type="text" id="hqp-add-username"></div>
+      <div class="form-row"><label>Password:</label><input type="password" id="hqp-add-password"></div>
+    </div>
     <button onclick="saveHqpInstance()">Add</button>
     <button onclick="cancelAddInstance()">Cancel</button>
     <span id="hqp-add-msg" class="status-msg"></span>
@@ -1381,12 +1389,60 @@ function showAddInstance() {
   document.getElementById('hqp-add-username').value = '';
   document.getElementById('hqp-add-password').value = '';
   document.getElementById('hqp-add-msg').textContent = '';
+  document.getElementById('hqp-add-type-msg').textContent = '';
+  document.getElementById('hqp-add-credentials').style.display = 'none';
 }
 
 function cancelAddInstance() {
   document.getElementById('hqp-add-form').style.display = 'none';
   document.getElementById('hqp-add-btn').style.display = 'block';
   document.getElementById('hqp-add-msg').textContent = '';
+}
+
+async function detectHqpType() {
+  const host = document.getElementById('hqp-add-host').value;
+  const typeMsg = document.getElementById('hqp-add-type-msg');
+  const credentialsDiv = document.getElementById('hqp-add-credentials');
+
+  if (!host) {
+    typeMsg.textContent = '';
+    credentialsDiv.style.display = 'none';
+    return;
+  }
+
+  typeMsg.textContent = 'Detecting...';
+  typeMsg.className = 'muted';
+
+  try {
+    const res = await fetch('/hqp/detect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ host })
+    });
+
+    const data = await res.json();
+
+    if (!data.reachable) {
+      typeMsg.textContent = '❌ Cannot reach HQPlayer at this address. Check host/network.';
+      typeMsg.className = 'status-msg error';
+      credentialsDiv.style.display = 'none';
+      return;
+    }
+
+    const productName = data.product || 'Unknown';
+    typeMsg.textContent = '✓ Detected: ' + productName;
+    typeMsg.className = 'status-msg success';
+
+    if (data.isEmbedded) {
+      credentialsDiv.style.display = 'block';
+    } else {
+      credentialsDiv.style.display = 'none';
+    }
+  } catch (e) {
+    typeMsg.textContent = '❌ Detection failed: ' + e.message;
+    typeMsg.className = 'status-msg error';
+    credentialsDiv.style.display = 'none';
+  }
 }
 
 async function saveHqpInstance() {
