@@ -30,7 +30,7 @@ The `dsp` field is **only present** when the zone is linked to a DSP processor (
 | `type` | string | DSP type, currently always `"hqplayer"` |
 | `instance` | string | Name of the HQPlayer instance |
 | `pipeline` | string | URL to fetch/set pipeline settings |
-| `profiles` | string? | URL to fetch profiles. **Only present** for instances that support profile (config) switching. |
+| `profiles` | string? | URL to fetch profiles. **Only present** for instances that support profile switching. |
 
 ### Checking for DSP
 
