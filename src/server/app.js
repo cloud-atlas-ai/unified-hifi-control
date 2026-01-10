@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const compression = require('compression');
 const morgan = require('morgan');
-const compression = require('compression');
 const path = require('path');
 const { createKnobRoutes } = require('../knobs/routes');
 const { loadAppSettings, saveAppSettings } = require('../lib/settings');
@@ -20,13 +19,9 @@ function createApp(opts = {}) {
   const compressionLevel = parseInt(process.env.COMPRESSION_LEVEL) || 6;
   app.use(compression({
     level: compressionLevel,
-    filter: (req, res) => {
-      // Always compress if client accepts gzip (including binary octet-stream)
-      return true;
-    }
+    filter: () => true,
   }));
   app.use(morgan('combined'));
-  app.use(compression());
 
   // Static files
   app.use('/ui', express.static(path.join(__dirname, '..', 'ui')));
