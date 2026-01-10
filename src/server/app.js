@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-const morgan = require('morgan');
 const compression = require('compression');
+const morgan = require('morgan');
 const path = require('path');
 const { createKnobRoutes } = require('../knobs/routes');
 const { loadAppSettings, saveAppSettings } = require('../lib/settings');
@@ -16,8 +16,12 @@ function createApp(opts = {}) {
 
   app.use(cors());
   app.use(express.json());
+  const compressionLevel = parseInt(process.env.COMPRESSION_LEVEL) || 6;
+  app.use(compression({
+    level: compressionLevel,
+    filter: () => true,
+  }));
   app.use(morgan('combined'));
-  app.use(compression());
 
   // Static files
   app.use('/ui', express.static(path.join(__dirname, '..', 'ui')));

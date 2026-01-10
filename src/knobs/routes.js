@@ -114,6 +114,7 @@ function createKnobRoutes({ bus, roon, knobs, adapterFactory, logger }) {
 
           const rgb565Buffer = await sharp(body)
             .resize(targetWidth, targetHeight, { fit: 'cover' })
+            .removeAlpha()
             .raw()
             .toBuffer({ resolveWithObject: true });
 
