@@ -327,18 +327,22 @@ class LMSClient {
    * Get artwork URL for a track
    * @param {string} coverid - The cover ID from player status
    * @param {object} opts - Options (width, height)
+   *
+   * LMS supports resizing via URL suffix: /music/{coverid}/cover_WxH.jpg
+   * e.g., /music/123/cover_360x360.jpg
    */
   getArtworkUrl(coverid, opts = {}) {
     if (!coverid) return null;
 
-    const params = new URLSearchParams();
-    if (opts.width) params.set('width', opts.width);
-    if (opts.height) params.set('height', opts.height);
+    // Use LMS's built-in resizing with suffix format
+    let suffix = 'cover';
+    if (opts.width && opts.height) {
+      suffix = `cover_${opts.width}x${opts.height}.jpg`;
+    } else if (opts.width) {
+      suffix = `cover_${opts.width}x${opts.width}.jpg`;
+    }
 
-    const query = params.toString();
-    const url = `${this.baseUrl}/music/${coverid}/cover${query ? '?' + query : ''}`;
-
-    return url;
+    return `${this.baseUrl}/music/${coverid}/${suffix}`;
   }
 
   /**

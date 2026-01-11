@@ -18,9 +18,9 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const http = require('http');
-const sharp = require('sharp');
 const { LMSClient } = require('./lms/client');
 const { createLogger } = require('./lib/logger');
+const { convertToRgb565 } = require('./knobs/rgb565');
 const { advertise } = require('./lib/mdns');
 
 const PORT = parseInt(process.env.PORT, 10) || 9199;
@@ -107,6 +107,42 @@ const server = http.createServer(async (req, res) => {
   const pathname = url.pathname;
 
   try {
+    // Root - minimal status page
+    if (pathname === '/') {
+      res.setHeader('Content-Type', 'text/html');
+      const players = await lms.getPlayers().catch(() => []);
+      const knobInfo = knobState.id ? `
+        <h2>Knob</h2>
+        <ul>
+          <li><strong>ID:</strong> ${knobState.id}</li>
+          <li><strong>Version:</strong> ${knobState.version || 'unknown'}</li>
+          <li><strong>Last seen:</strong> ${knobState.last_seen || 'never'}</li>
+          <li><strong>Battery:</strong> ${knobState.status.battery_level ?? '?'}% ${knobState.status.battery_charging ? '(charging)' : ''}</li>
+        </ul>` : '<p>No knob connected yet.</p>';
+
+      res.end(`<!DOCTYPE html>
+<html><head><title>Unified Hi-Fi Control (LMS)</title>
+<style>body{font-family:system-ui,sans-serif;max-width:600px;margin:2em auto;padding:0 1em}
+h1{color:#333}h2{color:#666;border-bottom:1px solid #ddd}ul{list-style:none;padding:0}
+li{padding:0.3em 0}a{color:#0066cc}</style></head>
+<body>
+<h1>Unified Hi-Fi Control</h1>
+<p>LMS Plugin Mode</p>
+<h2>Zones (${players.length})</h2>
+<ul>${players.map(p => `<li><strong>${p.name}</strong> - ${p.model || 'Unknown'}</li>`).join('') || '<li>No players found</li>'}</ul>
+${knobInfo}
+<h2>API Endpoints</h2>
+<ul>
+  <li><a href="/health">/health</a> - Health check</li>
+  <li><a href="/zones">/zones</a> - List zones</li>
+  <li><a href="/api/knobs">/api/knobs</a> - Knob status</li>
+</ul>
+<h2>Firmware Updates</h2>
+<p>To update knob firmware, visit <a href="https://roon-knob.muness.com/" target="_blank">roon-knob.muness.com</a></p>
+</body></html>`);
+      return;
+    }
+
     // Health check
     if (pathname === '/health' || pathname === '/status') {
       res.setHeader('Content-Type', 'application/json');
@@ -222,43 +258,24 @@ const server = http.createServer(async (req, res) => {
       }
 
       try {
-        const { contentType, body } = await lms.getArtwork(coverId);
-        let imageBuffer = Buffer.from(await body.arrayBuffer());
+        // Let LMS do the resizing via URL format (cover_WxH.jpg)
+        const { contentType, body } = await lms.getArtwork(coverId, { width, height });
 
         if (format === 'rgb565') {
-          const result = await sharp(imageBuffer)
-            .resize(width, height, { fit: 'cover' })
-            .raw()
-            .toBuffer({ resolveWithObject: true });
-
-          const rgb888 = result.data;
-          const rgb565 = Buffer.alloc(width * height * 2);
-
-          for (let i = 0; i < rgb888.length; i += 3) {
-            const r = rgb888[i] >> 3;
-            const g = rgb888[i + 1] >> 2;
-            const b = rgb888[i + 2] >> 3;
-            const pixel = (r << 11) | (g << 5) | b;
-            const idx = (i / 3) * 2;
-            rgb565[idx] = pixel & 0xFF;
-            rgb565[idx + 1] = (pixel >> 8) & 0xFF;
-          }
+          // Use pure JS converter (no native deps for pkg bundle)
+          const result = convertToRgb565(body, width, height);
 
           res.setHeader('Content-Type', 'application/octet-stream');
-          res.setHeader('X-Image-Width', width.toString());
-          res.setHeader('X-Image-Height', height.toString());
+          res.setHeader('X-Image-Width', result.width.toString());
+          res.setHeader('X-Image-Height', result.height.toString());
           res.setHeader('X-Image-Format', 'rgb565');
-          res.end(rgb565);
+          res.end(result.data);
           return;
         }
 
-        imageBuffer = await sharp(imageBuffer)
-          .resize(width, height, { fit: 'cover' })
-          .jpeg({ quality: 80 })
-          .toBuffer();
-
-        res.setHeader('Content-Type', 'image/jpeg');
-        res.end(imageBuffer);
+        // Return JPEG directly (already resized by LMS)
+        res.setHeader('Content-Type', contentType || 'image/jpeg');
+        res.end(body);
         return;
 
       } catch (err) {
@@ -489,8 +506,25 @@ function getLocalIp() {
 const localIp = getLocalIp();
 let mdnsService;
 
-server.listen(PORT, () => {
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    log.error(`Port ${PORT} is already in use. Another instance may be running.`, { port: PORT, error: err.message });
+  } else {
+    log.error('Server error', { error: err.message, code: err.code });
+  }
+  process.exit(1);
+});
+
+server.listen(PORT, async () => {
   log.info(`LMS plugin API listening on port ${PORT}`);
+
+  // Connect to parent LMS instance
+  try {
+    await lms.start();
+    log.info('Connected to LMS', { host: lms.host, port: lms.port, players: lms.players.size });
+  } catch (err) {
+    log.error('Failed to connect to LMS', { error: err.message });
+  }
 
   mdnsService = advertise(PORT, {
     name: 'Unified Hi-Fi Control (LMS)',

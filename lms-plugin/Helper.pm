@@ -191,17 +191,25 @@ sub ensureBinary {
     return;  # Async - result via callback
 }
 
-# Download binary from URL
+# Download binary from URL (with redirect handling)
 sub downloadBinary {
-    my ($class, $url, $dest, $callback) = @_;
+    my ($class, $url, $dest, $callback, $redirectCount) = @_;
+    $redirectCount //= 0;
 
-    $downloadInProgress = 1;
+    # Prevent infinite redirects
+    if ($redirectCount > 5) {
+        $downloadInProgress = 0;
+        $callback->(0, "Too many redirects") if $callback;
+        return;
+    }
+
+    $downloadInProgress = 1 if $redirectCount == 0;
 
     # Ensure Bin directory exists
     my $bindir = catdir(_pluginDataFor('basedir'), 'Bin');
     make_path($bindir) unless -d $bindir;
 
-    $log->info("Downloading binary from $url");
+    $log->info("Downloading binary from $url" . ($redirectCount ? " (redirect $redirectCount)" : ""));
 
     eval {
         require Slim::Networking::SimpleAsyncHTTP;
@@ -209,9 +217,22 @@ sub downloadBinary {
         my $http = Slim::Networking::SimpleAsyncHTTP->new(
             sub {
                 my $response = shift;
+
+                my $code = $response->code;
+
+                # Handle redirects (301, 302, 303, 307, 308)
+                if ($code >= 300 && $code < 400) {
+                    my $location = $response->headers->header('Location');
+                    if ($location) {
+                        $log->debug("Following redirect to: $location");
+                        $class->downloadBinary($location, $dest, $callback, $redirectCount + 1);
+                        return;
+                    }
+                }
+
                 $downloadInProgress = 0;
 
-                if ($response->code == 200) {
+                if ($code == 200) {
                     # Write binary to file
                     open my $fh, '>', $dest or do {
                         $callback->(0, "Cannot write to $dest: $!") if $callback;
@@ -223,7 +244,7 @@ sub downloadBinary {
 
                     $callback->(1) if $callback;
                 } else {
-                    $callback->(0, "HTTP " . $response->code . ": " . $response->message) if $callback;
+                    $callback->(0, "HTTP $code: " . $response->message) if $callback;
                 }
             },
             sub {
@@ -330,7 +351,8 @@ sub _doStart {
     my $loglevel = $prefs->get('loglevel') || 'info';
 
     # Make executable on Unix
-    if (Slim::Utils::OSDetect::OS() ne 'win') {
+    my $os = Slim::Utils::OSDetect::OS();
+    if ($os ne 'win') {
         chmod 0755, $binaryPath;
     }
 
@@ -340,46 +362,36 @@ sub _doStart {
 
     $log->info("Starting Unified Hi-Fi Control: $binaryPath on port $port");
 
-    # Fork and exec the helper process
-    my $pid = fork();
-
-    if (!defined $pid) {
-        $log->error("Failed to fork: $!");
-        return;
+    # Build command with environment variables
+    my $cmd;
+    if ($os eq 'win') {
+        # Windows: use start /B
+        $cmd = "set PORT=$port && set LOG_LEVEL=$loglevel && set CONFIG_DIR=$configDir && set LMS_HOST=localhost && set LMS_PORT=$lmsPort && start /B \"\" \"$binaryPath\"";
+    } else {
+        # Unix: use env and nohup with background
+        $cmd = "PORT=$port LOG_LEVEL=$loglevel CONFIG_DIR='$configDir' LMS_HOST=localhost LMS_PORT=$lmsPort nohup '$binaryPath' > /dev/null 2>&1 &";
     }
 
-    if ($pid == 0) {
-        # Child process
-        # Set environment variables
-        $ENV{PORT} = $port;
-        $ENV{LOG_LEVEL} = $loglevel;
-        $ENV{CONFIG_DIR} = $configDir;
-        $ENV{LMS_HOST} = 'localhost';
-        $ENV{LMS_PORT} = $lmsPort;
+    $log->debug("Running: $cmd");
 
-        # Detach from parent's file handles
-        close(STDIN);
-        close(STDOUT);
-        close(STDERR);
+    # Run the command
+    system($cmd);
 
-        # Start new session to fully detach
-        POSIX::setsid();
+    # Give it a moment to start
+    Slim::Utils::Timers::setTimer($class, time() + 2, sub {
+        # Try to find the PID
+        if ($os ne 'win') {
+            my $pgrep = `pgrep -f '$binaryPath' 2>/dev/null`;
+            if ($pgrep =~ /(\d+)/) {
+                $helper_pid = $1;
+                $log->info("Helper started with PID $helper_pid");
+            }
+        }
+        $binary = $binaryPath;
 
-        # Exec the binary
-        exec($binaryPath) or do {
-            # If exec fails, exit child
-            POSIX::_exit(1);
-        };
-    }
-
-    # Parent process
-    $helper_pid = $pid;
-    $binary = $binaryPath;
-
-    $log->info("Helper started with PID $helper_pid");
-
-    # Schedule health checks
-    Slim::Utils::Timers::setTimer($class, time() + HEALTH_CHECK_INTERVAL, \&_healthCheck);
+        # Schedule health checks
+        Slim::Utils::Timers::setTimer($class, time() + HEALTH_CHECK_INTERVAL, \&_healthCheck);
+    });
 
     return 1;
 }
@@ -391,6 +403,9 @@ sub stop {
     Slim::Utils::Timers::killTimers($class, \&_healthCheck);
     Slim::Utils::Timers::killTimers($class, \&_resetRestarts);
 
+    my $os = Slim::Utils::OSDetect::OS();
+
+    # Try to stop by PID first
     if (_isAlive()) {
         $log->info("Stopping Unified Hi-Fi Control (PID $helper_pid)");
         kill('TERM', $helper_pid);
@@ -407,6 +422,19 @@ sub stop {
         }
         waitpid($helper_pid, 0);
         $helper_pid = undef;
+    }
+
+    # Fallback: kill by process name (in case PID wasn't captured)
+    if ($os eq 'win') {
+        my $killed = system('taskkill /F /IM unified-hifi-win64.exe 2>nul');
+        if ($killed == 0) {
+            $log->info("Stopped helper process via taskkill");
+        }
+    } else {
+        my $killed = system("pkill -f 'unified-hifi-darwin\\|unified-hifi-linux' 2>/dev/null");
+        if ($killed == 0) {
+            $log->info("Stopped helper process via pkill");
+        }
     }
 
     $restarts = 0;
@@ -469,7 +497,8 @@ sub _resetRestarts {
 
 sub _pluginDataFor {
     my $key = shift;
-    my $data = Slim::Utils::PluginManager->dataForPlugin(__PACKAGE__);
+    # Use the main Plugin module for dataForPlugin, not Helper
+    my $data = Slim::Utils::PluginManager->dataForPlugin('Plugins::UnifiedHiFi::Plugin');
     return $data ? $data->{$key} : undef;
 }
 

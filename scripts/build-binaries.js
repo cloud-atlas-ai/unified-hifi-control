@@ -43,12 +43,13 @@ const FULL_TARGETS = [
   { target: 'node18-win-x64', output: 'unified-hifi-win-x64.exe' },
 ];
 
+// LMS builds use same naming as GitHub releases (for on-demand download)
 const LMS_TARGETS = [
-  { target: 'node18-linux-x64', output: 'unified-hifi-lms-linux-x64' },
-  { target: 'node18-linux-arm64', output: 'unified-hifi-lms-linux-arm64' },
-  { target: 'node18-macos-x64', output: 'unified-hifi-lms-macos-x64' },
-  { target: 'node18-macos-arm64', output: 'unified-hifi-lms-macos-arm64' },
-  { target: 'node18-win-x64', output: 'unified-hifi-lms-win-x64.exe' },
+  { target: 'node18-linux-x64', output: 'unified-hifi-linux-x86_64' },
+  { target: 'node18-linux-arm64', output: 'unified-hifi-linux-aarch64' },
+  { target: 'node18-macos-x64', output: 'unified-hifi-darwin-x86_64' },
+  { target: 'node18-macos-arm64', output: 'unified-hifi-darwin-arm64' },
+  { target: 'node18-win-x64', output: 'unified-hifi-win64.exe' },
 ];
 
 async function main() {
@@ -73,9 +74,9 @@ async function main() {
 
   // Build LMS-only binaries (if --lms-only or --all/default)
   if (lmsOnly || buildBoth) {
-    console.log('\n=== Building LMS Plugin Binaries (minimal) ===\n');
+    console.log('\n=== Building LMS Plugin Binaries (minimal, no sharp) ===\n');
     for (const { target, output } of LMS_TARGETS) {
-      await buildTarget(target, output, 'src/lms-entry.js');
+      await buildTarget(target, output, 'src/lms-entry.js', true);  // excludeSharp=true
       allOutputs.push(output);
     }
   }
@@ -94,14 +95,17 @@ async function main() {
   console.log(`\nOutput directory: ${DIST}`);
 }
 
-async function buildTarget(target, output, entryPoint) {
+async function buildTarget(target, output, entryPoint, excludeSharp = false) {
   console.log(`Building ${output}...`);
 
   const outputPath = path.join(DIST, output);
 
+  // LMS builds exclude sharp (uses jpeg-js instead for pkg compatibility)
+  const ignoreFlag = excludeSharp ? '--ignore sharp' : '';
+
   try {
     execSync(
-      `npx pkg "${entryPoint}" --target ${target} --output "${outputPath}" --config package.json`,
+      `npx pkg "${entryPoint}" --target ${target} --output "${outputPath}" --config package.json ${ignoreFlag}`,
       {
         cwd: ROOT,
         stdio: 'inherit',
