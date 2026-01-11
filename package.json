@@ -46,7 +46,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cloud-atlas-ai/unified-hifi-control.git"
+    "url": "git+https://github.com/open-horizon-labs/unified-hifi-control.git"
   },
   "author": "Muness Castle",
   "license": "SEE LICENSE IN LICENSE",
