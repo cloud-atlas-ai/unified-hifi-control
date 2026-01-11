@@ -243,6 +243,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
+            artifacts/binaries/*
             artifacts/macos-dmg/*.dmg
             artifacts/windows-msi/*.msi
             artifacts/linux-packages/*.deb
