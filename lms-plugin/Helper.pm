@@ -396,7 +396,7 @@ sub _doStart {
     return 1;
 }
 
-# Stop the helper process
+# Stop the helper process (non-blocking to avoid freezing LMS shutdown)
 sub stop {
     my $class = shift;
 
@@ -405,36 +405,20 @@ sub stop {
 
     my $os = Slim::Utils::OSDetect::OS();
 
-    # Try to stop by PID first
-    if (_isAlive()) {
+    # Send SIGTERM if we have a PID
+    if ($helper_pid) {
         $log->info("Stopping Unified Hi-Fi Control (PID $helper_pid)");
         kill('TERM', $helper_pid);
-        # Give it a moment to terminate gracefully
-        my $waited = 0;
-        while (_isAlive() && $waited < 5) {
-            sleep(1);
-            $waited++;
-        }
-        # Force kill if still running
-        if (_isAlive()) {
-            $log->warn("Helper did not terminate gracefully, forcing kill");
-            kill('KILL', $helper_pid);
-        }
-        waitpid($helper_pid, 0);
+        # Non-blocking reap
+        waitpid($helper_pid, WNOHANG);
         $helper_pid = undef;
     }
 
-    # Fallback: kill by process name (in case PID wasn't captured)
+    # Also kill by process name (non-blocking, runs in background)
     if ($os eq 'win') {
-        my $killed = system('taskkill /F /IM unified-hifi-win64.exe 2>nul');
-        if ($killed == 0) {
-            $log->info("Stopped helper process via taskkill");
-        }
+        system('start /B taskkill /F /IM unified-hifi-win64.exe 2>nul');
     } else {
-        my $killed = system("pkill -f 'unified-hifi-darwin\\|unified-hifi-linux' 2>/dev/null");
-        if ($killed == 0) {
-            $log->info("Stopped helper process via pkill");
-        }
+        system("pkill -TERM -f 'unified-hifi-darwin\\|unified-hifi-linux' 2>/dev/null &");
     }
 
     $restarts = 0;
