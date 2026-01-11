@@ -1,0 +1,16 @@
+<?xml version="2.5.0" encoding="UTF-8"?>
+<extensions>
+  <plugins>
+    <plugin name="UnifiedHiFi"
+            version="2.4.1"
+            minTarget="8.0"
+            maxTarget="*">
+      <title lang="EN">Unified Hi-Fi Control</title>
+      <desc lang="EN">Source-agnostic hi-fi control bridge for Roon, LMS, HQPlayer, and hardware knobs. Provides HTTP APIs, MQTT integration, and web UI for controlling your audio system from anywhere.</desc>
+      <url>https://github.com/cloud-atlas-ai/unified-hifi-control/releases/download/v2.5.0/lms-unified-hifi-control-2.5.0.zip</url>
+      <sha>b815e29a07cde10cb7f3db3551b40be0e84ddb0f</sha>
+      <creator>Muness Castle</creator>
+      <email>muness@alrubaie.net</email>
+    </plugin>
+  </plugins>
+</extensions>
