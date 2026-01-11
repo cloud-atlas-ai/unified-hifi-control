@@ -187,6 +187,42 @@ function createApp(opts = {}) {
     }
   });
 
+  // Matrix profiles routes
+  app.get('/hqp/matrix/profiles', async (req, res) => {
+    const firstInstance = hqpInstances.size > 0 ? Array.from(hqpInstances.values())[0] : null;
+    if (!firstInstance || !firstInstance.client || !firstInstance.client.isConfigured()) {
+      return res.json({ enabled: false, profiles: [] });
+    }
+    try {
+      const [profiles, current] = await Promise.all([
+        firstInstance.client.getMatrixProfiles(),
+        firstInstance.client.getMatrixProfile(),
+      ]);
+      res.json({ enabled: true, profiles, current: current?.value || null });
+    } catch (err) {
+      log.warn('HQP matrix profiles failed', { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/hqp/matrix/profile', async (req, res) => {
+    const { profile } = req.body;
+    if (!profile) {
+      return res.status(400).json({ error: 'profile required' });
+    }
+    const firstInstance = hqpInstances.size > 0 ? Array.from(hqpInstances.values())[0] : null;
+    if (!firstInstance || !firstInstance.client || !firstInstance.client.isConfigured()) {
+      return res.status(400).json({ error: 'HQPlayer not configured' });
+    }
+    try {
+      await firstInstance.client.setMatrixProfile(profile);
+      res.json({ ok: true });
+    } catch (err) {
+      log.warn('HQP set matrix profile failed', { error: err.message, profile });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post('/hqp/detect', async (req, res) => {
     const { host } = req.body;
     if (!host) {

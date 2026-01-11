@@ -721,6 +721,7 @@ ${navHtml('zone')}
     <div id="hqp-controls" class="hidden">
     <p>Status: <span id="hqp-status">checking...</span></p>
     <div id="hqp-profile-row" class="form-row"><label>Configuration:</label><select id="hqp-profile" onchange="loadProfile(this.value)"></select></div>
+    <div id="hqp-matrix-row" class="form-row hidden"><label>Matrix:</label><select id="hqp-matrix" onchange="setMatrixProfile(this.value)"></select></div>
     <div class="form-row"><label>Mode:</label><select id="hqp-mode" onchange="setPipeline('mode',this.value)"></select></div>
     <div class="form-row"><label>Sample Rate:</label><select id="hqp-samplerate" onchange="setPipeline('samplerate',this.value)"></select></div>
     <div class="form-row"><label>Filter (1x):</label><select id="hqp-filter1x" onchange="setPipeline('filter1x',this.value)"></select></div>
@@ -880,6 +881,8 @@ async function loadHqpPipeline() {
     const modeLabel = s.mode?.selected?.label?.toLowerCase() || '';
     shaperLabel.textContent = modeLabel.includes('sdm') || modeLabel.includes('dsd') ? 'Modulator:' : 'Dither:';
   }
+  // Load matrix profiles (non-blocking)
+  loadHqpMatrix();
   // Hide loading, show controls
   document.getElementById('hqp-loading').classList.add('hidden');
   document.getElementById('hqp-controls').classList.remove('hidden');
@@ -906,9 +909,41 @@ async function loadProfile(profile) {
   setTimeout(loadHqpPipeline, 2000);
 }
 
+async function loadHqpMatrix() {
+  try {
+    const res = await fetch('/hqp/matrix/profiles');
+    const data = await res.json();
+    const row = document.getElementById('hqp-matrix-row');
+    const sel = document.getElementById('hqp-matrix');
+    if (!data.enabled || !data.profiles || data.profiles.length === 0) {
+      if (row) row.classList.add('hidden');
+      return;
+    }
+    if (row) row.classList.remove('hidden');
+    sel.innerHTML = '';
+    data.profiles.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.name;
+      opt.textContent = p.name;
+      if (data.current === p.name) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  } catch (e) { /* Matrix profiles not available */ }
+}
+
+async function setMatrixProfile(profile) {
+  if (!profile) return;
+  const msg = document.getElementById('hqp-msg');
+  msg.textContent = 'Setting matrix...';
+  msg.className = 'status-msg';
+  const res = await fetch('/hqp/matrix/profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profile }) });
+  msg.textContent = res.ok ? 'Matrix updated' : 'Error';
+  msg.className = 'status-msg ' + (res.ok ? 'success' : 'error');
+}
+
 async function setPipeline(setting, value) {
   // Disable all HQPlayer controls and show loading
-  const selects = ['hqp-mode', 'hqp-samplerate', 'hqp-filter1x', 'hqp-filterNx', 'hqp-shaper', 'hqp-profile'];
+  const selects = ['hqp-mode', 'hqp-samplerate', 'hqp-filter1x', 'hqp-filterNx', 'hqp-shaper', 'hqp-profile', 'hqp-matrix'];
   selects.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.disabled = true;
