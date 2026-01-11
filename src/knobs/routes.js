@@ -928,17 +928,26 @@ async function loadHqpMatrix() {
       if (data.current === p.name) opt.selected = true;
       sel.appendChild(opt);
     });
-  } catch (e) { /* Matrix profiles not available */ }
+  } catch (e) { console.debug('Matrix profiles not available:', e.message); }
 }
 
 async function setMatrixProfile(profile) {
   if (!profile) return;
+  // Disable controls during update
+  const selects = ['hqp-mode', 'hqp-samplerate', 'hqp-filter1x', 'hqp-filterNx', 'hqp-shaper', 'hqp-profile', 'hqp-matrix'];
+  selects.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = true; });
   const msg = document.getElementById('hqp-msg');
   msg.textContent = 'Setting matrix...';
   msg.className = 'status-msg';
+  document.body.style.cursor = 'wait';
+
   const res = await fetch('/hqp/matrix/profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profile }) });
   msg.textContent = res.ok ? 'Matrix updated' : 'Error';
   msg.className = 'status-msg ' + (res.ok ? 'success' : 'error');
+
+  // Re-enable controls
+  selects.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
+  document.body.style.cursor = '';
 }
 
 async function setPipeline(setting, value) {
