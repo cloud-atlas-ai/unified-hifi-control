@@ -141,12 +141,16 @@ function createRoonClient(opts = {}) {
   function subscribe(core) {
     const transport = core.services.RoonApiTransport;
     if (!transport) {
+      log.error('Transport service unavailable after core paired');
       svc_status.set_status('Transport service unavailable', true);
       return;
     }
 
+    log.info('Subscribing to zones...');
     transport.subscribe_zones((msg, data) => {
+      log.debug('Zone subscription message', { msg, zoneCount: data?.zones?.length });
       if (msg === 'Subscribed' && data?.zones) {
+        log.info('Zones received', { count: data.zones.length, names: data.zones.map(z => z.display_name) });
         state.zones = data.zones;
         data.zones.forEach(updateZone);
         try { onZonesChanged(); } catch (e) { log.warn('onZonesChanged error:', e); }
@@ -175,9 +179,12 @@ function createRoonClient(opts = {}) {
           });
         }
       } else if (msg === 'NetworkError') {
+        log.warn('Zone subscription network error');
         if (!state.transportDisconnectedAt) {
           state.transportDisconnectedAt = Date.now();
         }
+      } else {
+        log.debug('Zone subscription unknown message', { msg });
       }
     });
 
