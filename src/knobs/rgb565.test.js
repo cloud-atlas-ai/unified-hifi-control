@@ -4,13 +4,13 @@
  * Bug: PNG images with alpha channels (RGBA, 4 bytes/pixel) caused channel
  * misalignment because the conversion loop assumed 3 bytes/pixel (RGB).
  *
- * Fix: Handle RGBA (4 bytes/pixel) from jimp bitmap data
+ * Fix: Handle RGBA (4 bytes/pixel) from image bitmap data
  *
  * Issue: https://github.com/open-horizon-labs/unified-hifi-control/issues/35
  * Forum: https://forums.lyrion.org/forum/user-forums/3rd-party-hardware/1804977-roon-knob-includes-lms-support?p=1805839#post1805839
  */
 
-const { Jimp } = require('jimp');
+const { read: readImage, resize: resizeImage, encodeJpeg } = require('../lib/image');
 
 function convertToRgb565(rgba, width, height) {
   const rgb565 = Buffer.alloc(width * height * 2);
@@ -27,37 +27,85 @@ function convertToRgb565(rgba, width, height) {
   return rgb565;
 }
 
-describe('RGB565 conversion with jimp', () => {
+describe('RGB565 conversion with pure JS image processing', () => {
   const targetWidth = 10;
   const targetHeight = 10;
 
-  test('jimp produces RGBA bitmap (4 bytes per pixel)', async () => {
-    // Create a test image with jimp
-    const image = new Jimp({ width: 20, height: 20, color: 0xff0000ff }); // red
-    image.resize({ w: targetWidth, h: targetHeight });
+  test('resize produces RGBA bitmap (4 bytes per pixel)', () => {
+    // Create a test image: 20x20 red pixels
+    const srcWidth = 20;
+    const srcHeight = 20;
+    const src = {
+      width: srcWidth,
+      height: srcHeight,
+      data: Buffer.alloc(srcWidth * srcHeight * 4)
+    };
+    // Fill with red (RGBA)
+    for (let i = 0; i < src.data.length; i += 4) {
+      src.data[i] = 255;     // R
+      src.data[i + 1] = 0;   // G
+      src.data[i + 2] = 0;   // B
+      src.data[i + 3] = 255; // A
+    }
 
-    // Jimp bitmap.data is always RGBA
-    expect(image.bitmap.data.length).toBe(targetWidth * targetHeight * 4);
+    const resized = resizeImage(src, targetWidth, targetHeight);
+
+    // Result should be RGBA (4 bytes per pixel)
+    expect(resized.data.length).toBe(targetWidth * targetHeight * 4);
+    expect(resized.width).toBe(targetWidth);
+    expect(resized.height).toBe(targetHeight);
   });
 
-  test('RGB565 output size is correct', async () => {
-    const image = new Jimp({ width: 20, height: 20, color: 0x8040c0ff }); // purple
-    image.resize({ w: targetWidth, h: targetHeight });
+  test('RGB565 output size is correct', () => {
+    // Create a test image: 20x20 purple pixels
+    const srcWidth = 20;
+    const srcHeight = 20;
+    const src = {
+      width: srcWidth,
+      height: srcHeight,
+      data: Buffer.alloc(srcWidth * srcHeight * 4)
+    };
+    // Fill with purple (RGBA)
+    for (let i = 0; i < src.data.length; i += 4) {
+      src.data[i] = 128;     // R
+      src.data[i + 1] = 64;  // G
+      src.data[i + 2] = 192; // B
+      src.data[i + 3] = 255; // A
+    }
 
-    const rgb565 = convertToRgb565(image.bitmap.data, targetWidth, targetHeight);
+    const resized = resizeImage(src, targetWidth, targetHeight);
+    const rgb565 = convertToRgb565(resized.data, targetWidth, targetHeight);
+
     expect(rgb565.length).toBe(targetWidth * targetHeight * 2);
   });
 
-  test('can read and resize JPEG buffer', async () => {
-    // Create a JPEG buffer
-    const original = new Jimp({ width: 100, height: 100, color: 0x00ff00ff }); // green
-    const jpegBuffer = await original.getBuffer('image/jpeg');
+  test('can encode and decode JPEG', () => {
+    // Create a test image: 100x100 green pixels
+    const srcWidth = 100;
+    const srcHeight = 100;
+    const src = {
+      width: srcWidth,
+      height: srcHeight,
+      data: Buffer.alloc(srcWidth * srcHeight * 4)
+    };
+    // Fill with green (RGBA)
+    for (let i = 0; i < src.data.length; i += 4) {
+      src.data[i] = 0;       // R
+      src.data[i + 1] = 255; // G
+      src.data[i + 2] = 0;   // B
+      src.data[i + 3] = 255; // A
+    }
 
-    // Read it back and resize
-    const image = await Jimp.read(jpegBuffer);
-    image.resize({ w: targetWidth, h: targetHeight });
+    // Encode to JPEG
+    const jpegBuffer = encodeJpeg(src, 80);
+    expect(jpegBuffer).toBeInstanceOf(Buffer);
+    expect(jpegBuffer.length).toBeGreaterThan(0);
 
-    expect(image.bitmap.width).toBe(targetWidth);
-    expect(image.bitmap.height).toBe(targetHeight);
+    // Decode and resize
+    const decoded = readImage(jpegBuffer);
+    const resized = resizeImage(decoded, targetWidth, targetHeight);
+
+    expect(resized.width).toBe(targetWidth);
+    expect(resized.height).toBe(targetHeight);
   });
 });

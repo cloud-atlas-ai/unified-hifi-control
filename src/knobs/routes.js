@@ -2,7 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const busDebug = require('../bus/debug');
-const { Jimp } = require('jimp');
+const { read: readImage, resize: resizeImage, encodeJpeg } = require('../lib/image');
 const { getDataDir } = require('../lib/paths');
 
 function extractKnob(req) {
@@ -113,12 +113,12 @@ function createKnobRoutes({ bus, roon, knobs, adapterFactory, logger }) {
           const targetWidth = parseInt(width) || 360;
           const targetHeight = parseInt(height) || 360;
 
-          // Use jimp (pure JS) for image processing
-          const image = await Jimp.read(body);
-          image.resize({ w: targetWidth, h: targetHeight });
+          // Use pure JS image processing (jpeg-js + bilinear resize)
+          const decoded = readImage(body);
+          const resized = resizeImage(decoded, targetWidth, targetHeight);
 
-          // Jimp bitmap.data is RGBA (4 bytes per pixel)
-          const rgba = image.bitmap.data;
+          // RGBA data (4 bytes per pixel)
+          const rgba = resized.data;
           const rgb565 = Buffer.alloc(targetWidth * targetHeight * 2);
 
           for (let i = 0; i < rgba.length; i += 4) {
@@ -159,10 +159,10 @@ function createKnobRoutes({ bus, roon, knobs, adapterFactory, logger }) {
             const targetWidth = parseInt(width) || parseInt(height) || 360;
             const targetHeight = parseInt(height) || parseInt(width) || 360;
 
-            // Use jimp (pure JS) for image processing
-            const image = await Jimp.read(body);
-            image.resize({ w: targetWidth, h: targetHeight });
-            const resizedBody = await image.getBuffer('image/jpeg', { quality: 80 });
+            // Use pure JS image processing (jpeg-js + bilinear resize)
+            const decoded = readImage(body);
+            const resized = resizeImage(decoded, targetWidth, targetHeight);
+            const resizedBody = encodeJpeg(resized, 80);
 
             log.info('Resized JPEG image', {
               originalSize: body.length,

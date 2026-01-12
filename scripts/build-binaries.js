@@ -125,10 +125,10 @@ async function buildTarget(target, output, entryPoint, excludeSharp = false) {
 }
 
 function checkNativeModules() {
-  // No native modules - jimp (image processing) is pure JS
+  // No native modules - image processing uses jpeg-js (pure JS)
   // linuxstatic targets produce fully static binaries that work on any Linux
   console.log('Note: Using linuxstatic targets for universal Linux compatibility.\n');
-  console.log('      Image processing uses jimp (pure JS) - no native modules.\n');
+  console.log('      Image processing uses jpeg-js (pure JS) - no native modules.\n');
 }
 
 main().catch((err) => {
