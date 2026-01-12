@@ -130,7 +130,13 @@ impl LmsAdapter {
     }
 
     /// Configure the LMS connection
-    pub async fn configure(&self, host: String, port: Option<u16>, username: Option<String>, password: Option<String>) {
+    pub async fn configure(
+        &self,
+        host: String,
+        port: Option<u16>,
+        username: Option<String>,
+        password: Option<String>,
+    ) {
         let mut state = self.state.write().await;
         state.host = Some(host);
         state.port = port.unwrap_or(DEFAULT_PORT);
@@ -152,19 +158,26 @@ impl LmsAdapter {
             host: state.host.clone(),
             port: state.port,
             player_count: state.players.len(),
-            players: state.players.values().map(|p| LmsPlayerInfo {
-                playerid: p.playerid.clone(),
-                name: p.name.clone(),
-                state: p.state.clone(),
-                connected: p.connected,
-            }).collect(),
+            players: state
+                .players
+                .values()
+                .map(|p| LmsPlayerInfo {
+                    playerid: p.playerid.clone(),
+                    name: p.name.clone(),
+                    state: p.state.clone(),
+                    connected: p.connected,
+                })
+                .collect(),
         }
     }
 
     /// Get base URL
     async fn base_url(&self) -> Result<String> {
         let state = self.state.read().await;
-        let host = state.host.as_ref().ok_or_else(|| anyhow!("LMS host not configured"))?;
+        let host = state
+            .host
+            .as_ref()
+            .ok_or_else(|| anyhow!("LMS host not configured"))?;
         Ok(format!("http://{}:{}", host, state.port))
     }
 
@@ -179,7 +192,9 @@ impl LmsAdapter {
             "params": [player_id.unwrap_or(""), params]
         });
 
-        let mut request = self.client.post(&url)
+        let mut request = self
+            .client
+            .post(&url)
             .header("Content-Type", "application/json")
             .json(&body);
 
@@ -210,41 +225,63 @@ impl LmsAdapter {
 
     /// Get list of all players
     pub async fn get_players(&self) -> Result<Vec<LmsPlayer>> {
-        let result = self.execute(None, vec![json!("players"), json!(0), json!(100)]).await?;
+        let result = self
+            .execute(None, vec![json!("players"), json!(0), json!(100)])
+            .await?;
 
-        let players_loop = result.get("players_loop")
+        let players_loop = result
+            .get("players_loop")
             .and_then(|v| v.as_array())
             .cloned()
             .unwrap_or_default();
 
-        Ok(players_loop.into_iter().map(|p| {
-            LmsPlayer {
-                playerid: p.get("playerid").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                name: p.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                model: p.get("model").and_then(|v| v.as_str()).unwrap_or("Unknown").to_string(),
+        Ok(players_loop
+            .into_iter()
+            .map(|p| LmsPlayer {
+                playerid: p
+                    .get("playerid")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                name: p
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                model: p
+                    .get("model")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Unknown")
+                    .to_string(),
                 connected: p.get("connected").and_then(|v| v.as_i64()).unwrap_or(0) == 1,
                 power: p.get("power").and_then(|v| v.as_i64()).unwrap_or(0) == 1,
                 ip: p.get("ip").and_then(|v| v.as_str()).map(|s| s.to_string()),
                 ..Default::default()
-            }
-        }).collect())
+            })
+            .collect())
     }
 
     /// Get player status
     pub async fn get_player_status(&self, player_id: &str) -> Result<LmsPlayer> {
         let base_url = self.base_url().await?;
-        let result = self.execute(
-            Some(player_id),
-            vec![json!("status"), json!("-"), json!(1), json!("tags:aAdltKc")]
-        ).await?;
+        let result = self
+            .execute(
+                Some(player_id),
+                vec![json!("status"), json!("-"), json!(1), json!("tags:aAdltKc")],
+            )
+            .await?;
 
-        let playlist_loop = result.get("playlist_loop")
+        let playlist_loop = result
+            .get("playlist_loop")
             .and_then(|v| v.as_array())
             .and_then(|arr| arr.first())
             .cloned()
             .unwrap_or(Value::Null);
 
-        let mode = result.get("mode").and_then(|v| v.as_str()).unwrap_or("stop");
+        let mode = result
+            .get("mode")
+            .and_then(|v| v.as_str())
+            .unwrap_or("stop");
         let state = match mode {
             "play" => "playing",
             "pause" => "paused",
@@ -252,7 +289,8 @@ impl LmsAdapter {
         };
 
         // Handle artwork URL
-        let mut artwork_url = playlist_loop.get("artwork_url")
+        let mut artwork_url = playlist_loop
+            .get("artwork_url")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
@@ -262,26 +300,56 @@ impl LmsAdapter {
             }
         }
 
-        let artwork_id = playlist_loop.get("coverid")
+        let artwork_id = playlist_loop
+            .get("coverid")
             .or_else(|| playlist_loop.get("artwork_track_id"))
             .or_else(|| playlist_loop.get("id"))
             .and_then(|v| v.as_str().or_else(|| v.as_i64().map(|_| "")))
             .map(|s| s.to_string())
-            .or_else(|| playlist_loop.get("coverid").and_then(|v| v.as_i64()).map(|n| n.to_string()));
+            .or_else(|| {
+                playlist_loop
+                    .get("coverid")
+                    .and_then(|v| v.as_i64())
+                    .map(|n| n.to_string())
+            });
 
         Ok(LmsPlayer {
             playerid: player_id.to_string(),
             state: state.to_string(),
             mode: mode.to_string(),
             power: result.get("power").and_then(|v| v.as_i64()).unwrap_or(0) == 1,
-            volume: result.get("mixer volume").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
-            playlist_tracks: result.get("playlist_tracks").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-            playlist_cur_index: result.get("playlist_cur_index").and_then(|v| v.as_u64()).map(|n| n as u32),
+            volume: result
+                .get("mixer volume")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32,
+            playlist_tracks: result
+                .get("playlist_tracks")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+            playlist_cur_index: result
+                .get("playlist_cur_index")
+                .and_then(|v| v.as_u64())
+                .map(|n| n as u32),
             time: result.get("time").and_then(|v| v.as_f64()).unwrap_or(0.0),
-            duration: playlist_loop.get("duration").and_then(|v| v.as_f64()).unwrap_or(0.0),
-            title: playlist_loop.get("title").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            artist: playlist_loop.get("artist").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            album: playlist_loop.get("album").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            duration: playlist_loop
+                .get("duration")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0),
+            title: playlist_loop
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            artist: playlist_loop
+                .get("artist")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            album: playlist_loop
+                .get("album")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
             artwork_track_id: artwork_id.clone(),
             coverid: artwork_id,
             artwork_url,
@@ -309,7 +377,8 @@ impl LmsAdapter {
         };
 
         tracing::info!("LMS client connected to {}", host);
-        self.bus.publish(BusEvent::LmsConnected { host: host.clone() });
+        self.bus
+            .publish(BusEvent::LmsConnected { host: host.clone() });
 
         // Spawn polling task
         let state = self.state.clone();
@@ -321,6 +390,13 @@ impl LmsAdapter {
 
             loop {
                 poll_interval.tick().await;
+
+                // Check if we should stop
+                let connected = { state.read().await.connected };
+                if !connected {
+                    tracing::info!("LMS polling stopped");
+                    break;
+                }
 
                 if let Err(e) = adapter.update_players().await {
                     tracing::error!("Failed to update LMS players: {}", e);
@@ -344,9 +420,8 @@ impl LmsAdapter {
         let base_url = self.base_url().await?;
         let players = self.get_players().await?;
 
-        let previous_ids: std::collections::HashSet<String> = {
-            self.state.read().await.players.keys().cloned().collect()
-        };
+        let previous_ids: std::collections::HashSet<String> =
+            { self.state.read().await.players.keys().cloned().collect() };
 
         for mut player in players {
             match self.get_player_status(&player.playerid).await {
@@ -375,13 +450,20 @@ impl LmsAdapter {
             state.players.insert(player.playerid.clone(), player);
         }
 
-        // Check for player set changes and emit events
-        let current_ids: std::collections::HashSet<String> = {
-            self.state.read().await.players.keys().cloned().collect()
-        };
+        // Emit events for player set changes
+        let current_ids: std::collections::HashSet<String> =
+            { self.state.read().await.players.keys().cloned().collect() };
 
         if previous_ids != current_ids {
-            // Zones changed
+            // Log zone changes for debugging (events emitted via bus on player state change)
+            let added: Vec<_> = current_ids.difference(&previous_ids).collect();
+            let removed: Vec<_> = previous_ids.difference(&current_ids).collect();
+            if !added.is_empty() {
+                tracing::debug!("LMS players added: {:?}", added);
+            }
+            if !removed.is_empty() {
+                tracing::debug!("LMS players removed: {:?}", removed);
+            }
         }
 
         Ok(())
@@ -406,7 +488,7 @@ impl LmsAdapter {
             "play" => vec![json!("play")],
             "pause" => vec![json!("pause"), json!(1)],
             "stop" => vec![json!("stop")],
-            "play_pause" => vec![json!("pause")],  // Toggle
+            "play_pause" => vec![json!("pause")], // Toggle
             "next" => vec![json!("playlist"), json!("index"), json!("+1")],
             "previous" | "prev" => vec![json!("playlist"), json!("index"), json!("-1")],
             "volume" | "vol_abs" => {
@@ -416,7 +498,11 @@ impl LmsAdapter {
             "vol_rel" => {
                 let v = value.unwrap_or(0);
                 let prefix = if v > 0 { "+" } else { "" };
-                vec![json!("mixer"), json!("volume"), json!(format!("{}{}", prefix, v))]
+                vec![
+                    json!("mixer"),
+                    json!("volume"),
+                    json!(format!("{}{}", prefix, v)),
+                ]
             }
             _ => return Err(anyhow!("Unknown command: {}", command)),
         };
@@ -445,7 +531,12 @@ impl LmsAdapter {
     }
 
     /// Get artwork URL for a track
-    pub async fn get_artwork_url(&self, coverid: &str, width: Option<u32>, height: Option<u32>) -> Result<String> {
+    pub async fn get_artwork_url(
+        &self,
+        coverid: &str,
+        width: Option<u32>,
+        height: Option<u32>,
+    ) -> Result<String> {
         let base_url = self.base_url().await?;
 
         let suffix = match (width, height) {
@@ -484,7 +575,10 @@ struct LmsAdapterPoller {
 impl LmsAdapterPoller {
     async fn base_url(&self) -> Result<String> {
         let state = self.state.read().await;
-        let host = state.host.as_ref().ok_or_else(|| anyhow!("LMS host not configured"))?;
+        let host = state
+            .host
+            .as_ref()
+            .ok_or_else(|| anyhow!("LMS host not configured"))?;
         Ok(format!("http://{}:{}", host, state.port))
     }
 
@@ -498,7 +592,9 @@ impl LmsAdapterPoller {
             "params": [player_id.unwrap_or(""), params]
         });
 
-        let mut request = self.client.post(&url)
+        let mut request = self
+            .client
+            .post(&url)
             .header("Content-Type", "application/json")
             .json(&body);
 
@@ -521,25 +617,32 @@ impl LmsAdapterPoller {
 
     async fn get_player_status(&self, player_id: &str) -> Result<LmsPlayer> {
         let base_url = self.base_url().await?;
-        let result = self.execute(
-            Some(player_id),
-            vec![json!("status"), json!("-"), json!(1), json!("tags:aAdltKc")]
-        ).await?;
+        let result = self
+            .execute(
+                Some(player_id),
+                vec![json!("status"), json!("-"), json!(1), json!("tags:aAdltKc")],
+            )
+            .await?;
 
-        let playlist_loop = result.get("playlist_loop")
+        let playlist_loop = result
+            .get("playlist_loop")
             .and_then(|v| v.as_array())
             .and_then(|arr| arr.first())
             .cloned()
             .unwrap_or(Value::Null);
 
-        let mode = result.get("mode").and_then(|v| v.as_str()).unwrap_or("stop");
+        let mode = result
+            .get("mode")
+            .and_then(|v| v.as_str())
+            .unwrap_or("stop");
         let state = match mode {
             "play" => "playing",
             "pause" => "paused",
             _ => "stopped",
         };
 
-        let mut artwork_url = playlist_loop.get("artwork_url")
+        let mut artwork_url = playlist_loop
+            .get("artwork_url")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
@@ -549,24 +652,54 @@ impl LmsAdapterPoller {
             }
         }
 
-        let artwork_id = playlist_loop.get("coverid")
+        let artwork_id = playlist_loop
+            .get("coverid")
             .and_then(|v| v.as_str().or_else(|| v.as_i64().map(|_| "")))
             .map(|s| s.to_string())
-            .or_else(|| playlist_loop.get("coverid").and_then(|v| v.as_i64()).map(|n| n.to_string()));
+            .or_else(|| {
+                playlist_loop
+                    .get("coverid")
+                    .and_then(|v| v.as_i64())
+                    .map(|n| n.to_string())
+            });
 
         Ok(LmsPlayer {
             playerid: player_id.to_string(),
             state: state.to_string(),
             mode: mode.to_string(),
             power: result.get("power").and_then(|v| v.as_i64()).unwrap_or(0) == 1,
-            volume: result.get("mixer volume").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
-            playlist_tracks: result.get("playlist_tracks").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-            playlist_cur_index: result.get("playlist_cur_index").and_then(|v| v.as_u64()).map(|n| n as u32),
+            volume: result
+                .get("mixer volume")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32,
+            playlist_tracks: result
+                .get("playlist_tracks")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+            playlist_cur_index: result
+                .get("playlist_cur_index")
+                .and_then(|v| v.as_u64())
+                .map(|n| n as u32),
             time: result.get("time").and_then(|v| v.as_f64()).unwrap_or(0.0),
-            duration: playlist_loop.get("duration").and_then(|v| v.as_f64()).unwrap_or(0.0),
-            title: playlist_loop.get("title").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            artist: playlist_loop.get("artist").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            album: playlist_loop.get("album").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            duration: playlist_loop
+                .get("duration")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0),
+            title: playlist_loop
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            artist: playlist_loop
+                .get("artist")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            album: playlist_loop
+                .get("album")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
             artwork_track_id: artwork_id.clone(),
             coverid: artwork_id,
             artwork_url,
@@ -575,21 +708,38 @@ impl LmsAdapterPoller {
     }
 
     async fn update_players(&self) -> Result<()> {
-        let result = self.execute(None, vec![json!("players"), json!(0), json!(100)]).await?;
+        let result = self
+            .execute(None, vec![json!("players"), json!(0), json!(100)])
+            .await?;
 
-        let players_loop = result.get("players_loop")
+        let players_loop = result
+            .get("players_loop")
             .and_then(|v| v.as_array())
             .cloned()
             .unwrap_or_default();
 
         for p in players_loop {
-            let playerid = p.get("playerid").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            if playerid.is_empty() { continue; }
+            let playerid = p
+                .get("playerid")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            if playerid.is_empty() {
+                continue;
+            }
 
             let mut player = LmsPlayer {
                 playerid: playerid.clone(),
-                name: p.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                model: p.get("model").and_then(|v| v.as_str()).unwrap_or("Unknown").to_string(),
+                name: p
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                model: p
+                    .get("model")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Unknown")
+                    .to_string(),
                 connected: p.get("connected").and_then(|v| v.as_i64()).unwrap_or(0) == 1,
                 power: p.get("power").and_then(|v| v.as_i64()).unwrap_or(0) == 1,
                 ip: p.get("ip").and_then(|v| v.as_str()).map(|s| s.to_string()),

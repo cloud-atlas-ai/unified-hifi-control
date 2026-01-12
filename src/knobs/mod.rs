@@ -11,9 +11,9 @@
 //! - Hardware API endpoints (/now_playing, /control, /config)
 //! - RGB565 image conversion for LCD display
 
-pub mod store;
-pub mod routes;
 pub mod image;
+pub mod routes;
+pub mod store;
 
-pub use store::KnobStore;
 pub use routes::*;
+pub use store::KnobStore;

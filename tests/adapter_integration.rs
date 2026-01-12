@@ -28,7 +28,11 @@ fn test_bus() -> (SharedBus, broadcast::Receiver<BusEvent>) {
 }
 
 /// Wait for a specific event type with timeout
-async fn expect_event<F>(rx: &mut broadcast::Receiver<BusEvent>, predicate: F, timeout_ms: u64) -> Option<BusEvent>
+async fn expect_event<F>(
+    rx: &mut broadcast::Receiver<BusEvent>,
+    predicate: F,
+    timeout_ms: u64,
+) -> Option<BusEvent>
 where
     F: Fn(&BusEvent) -> bool,
 {
@@ -41,7 +45,9 @@ where
                 Err(_) => return None,
             }
         }
-    }).await {
+    })
+    .await
+    {
         Ok(event) => event,
         Err(_) => None, // Timeout
     }
@@ -69,13 +75,9 @@ mod hqplayer_integration {
         let (bus, _rx) = test_bus();
         let adapter = HqpAdapter::new(bus);
 
-        adapter.configure(
-            "192.168.1.100".to_string(),
-            Some(4321),
-            None,
-            None,
-            None,
-        ).await;
+        adapter
+            .configure("192.168.1.100".to_string(), Some(4321), None, None, None)
+            .await;
 
         let status = adapter.get_status().await;
         assert_eq!(status.host, Some("192.168.1.100".to_string()));
@@ -91,8 +93,11 @@ mod hqplayer_integration {
         let result = adapter.control("play").await;
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("Not connected") || err.contains("connection"),
-            "Expected connection error, got: {}", err);
+        assert!(
+            err.contains("Not connected") || err.contains("connection"),
+            "Expected connection error, got: {}",
+            err
+        );
 
         // Test invalid action
         // (The current implementation doesn't validate actions until sent)
@@ -134,12 +139,9 @@ mod lms_integration {
         let (bus, _rx) = test_bus();
         let adapter = LmsAdapter::new(bus);
 
-        adapter.configure(
-            "192.168.1.50".to_string(),
-            Some(9000),
-            None,
-            None,
-        ).await;
+        adapter
+            .configure("192.168.1.50".to_string(), Some(9000), None, None)
+            .await;
 
         let status = adapter.get_status().await;
         assert_eq!(status.host, Some("192.168.1.50".to_string()));
@@ -334,13 +336,15 @@ mod error_handling {
         let adapter = HqpAdapter::new(bus);
 
         // Configure with unreachable host
-        adapter.configure(
-            "10.255.255.1".to_string(), // Likely unreachable
-            Some(4321),
-            None,
-            None,
-            None,
-        ).await;
+        adapter
+            .configure(
+                "10.255.255.1".to_string(), // Likely unreachable
+                Some(4321),
+                None,
+                None,
+                None,
+            )
+            .await;
 
         // Control should fail gracefully
         let result = adapter.control("play").await;

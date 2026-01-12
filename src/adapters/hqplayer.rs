@@ -30,8 +30,8 @@ const PROFILE_PATH: &str = "/config/profile/load";
 /// HQPlayer state information
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct HqpState {
-    pub state: u8,           // 0=stopped, 1=paused, 2=playing
-    pub mode: u8,            // PCM=0, SDM=1
+    pub state: u8, // 0=stopped, 1=paused, 2=playing
+    pub mode: u8,  // PCM=0, SDM=1
     pub filter: u32,
     pub filter1x: Option<u32>,
     pub filter_nx: Option<u32>,
@@ -42,7 +42,7 @@ pub struct HqpState {
     pub active_rate: u32,
     pub invert: bool,
     pub convolution: bool,
-    pub repeat: u8,          // 0=off, 1=track, 2=all
+    pub repeat: u8, // 0=off, 1=track, 2=all
     pub random: bool,
     pub adaptive: bool,
     pub filter_20k: bool,
@@ -323,7 +323,10 @@ impl HqpAdapter {
     pub async fn connect(&self) -> Result<()> {
         let (host, port) = {
             let state = self.state.read().await;
-            let host = state.host.clone().ok_or_else(|| anyhow!("HQPlayer host not configured"))?;
+            let host = state
+                .host
+                .clone()
+                .ok_or_else(|| anyhow!("HQPlayer host not configured"))?;
             (host, state.port)
         };
 
@@ -366,7 +369,8 @@ impl HqpAdapter {
         }
 
         tracing::info!("HQPlayer connected: {} v{}", info.name, info.version);
-        self.bus.publish(BusEvent::HqpConnected { host: host.clone() });
+        self.bus
+            .publish(BusEvent::HqpConnected { host: host.clone() });
 
         Ok(())
     }
@@ -392,7 +396,9 @@ impl HqpAdapter {
     /// Send command and get response
     async fn send_command(&self, xml: &str) -> Result<String> {
         let mut conn_guard = self.connection.lock().await;
-        let conn = conn_guard.as_mut().ok_or_else(|| anyhow!("Not connected"))?;
+        let conn = conn_guard
+            .as_mut()
+            .ok_or_else(|| anyhow!("Not connected"))?;
 
         // Send command
         conn.write_half.write_all(xml.as_bytes()).await?;
@@ -420,8 +426,10 @@ impl HqpAdapter {
 
         writer.write_event(Event::Empty(elem)).unwrap();
 
-        format!("<?xml version=\"1.0\"?>{}",
-            String::from_utf8(writer.into_inner().into_inner()).unwrap())
+        format!(
+            "<?xml version=\"1.0\"?>{}",
+            String::from_utf8(writer.into_inner().into_inner()).unwrap()
+        )
     }
 
     /// Parse XML attribute
@@ -449,7 +457,9 @@ impl HqpAdapter {
     }
 
     fn parse_attr_bool(xml: &str, attr: &str) -> bool {
-        Self::parse_attr(xml, attr).map(|s| s == "1").unwrap_or(false)
+        Self::parse_attr(xml, attr)
+            .map(|s| s == "1")
+            .unwrap_or(false)
     }
 
     /// Get HQPlayer info
@@ -564,11 +574,13 @@ impl HqpAdapter {
         let xml = Self::build_request("GetFilters", &[]);
         let response = self.send_command(&xml).await?;
 
-        Ok(Self::parse_items(&response, "FiltersItem", |item| FilterItem {
-            index: Self::parse_attr_u32(item, "index"),
-            name: Self::parse_attr(item, "name").unwrap_or_default(),
-            value: Self::parse_attr_u32(item, "value"),
-            arg: Self::parse_attr_u32(item, "arg"),
+        Ok(Self::parse_items(&response, "FiltersItem", |item| {
+            FilterItem {
+                index: Self::parse_attr_u32(item, "index"),
+                name: Self::parse_attr(item, "name").unwrap_or_default(),
+                value: Self::parse_attr_u32(item, "value"),
+                arg: Self::parse_attr_u32(item, "arg"),
+            }
         }))
     }
 
@@ -577,10 +589,12 @@ impl HqpAdapter {
         let xml = Self::build_request("GetShapers", &[]);
         let response = self.send_command(&xml).await?;
 
-        Ok(Self::parse_items(&response, "ShapersItem", |item| ListItem {
-            index: Self::parse_attr_u32(item, "index"),
-            name: Self::parse_attr(item, "name").unwrap_or_default(),
-            value: Self::parse_attr_u32(item, "value"),
+        Ok(Self::parse_items(&response, "ShapersItem", |item| {
+            ListItem {
+                index: Self::parse_attr_u32(item, "index"),
+                name: Self::parse_attr(item, "name").unwrap_or_default(),
+                value: Self::parse_attr_u32(item, "value"),
+            }
         }))
     }
 
@@ -733,10 +747,18 @@ impl HqpAdapter {
         let shaper_obj = shapers.get(shaper_idx);
 
         let get_mode_by_index = |idx: u8| -> String {
-            modes.iter().find(|m| m.index == idx as u32).map(|m| m.name.clone()).unwrap_or_default()
+            modes
+                .iter()
+                .find(|m| m.index == idx as u32)
+                .map(|m| m.name.clone())
+                .unwrap_or_default()
         };
         let get_mode_by_value = |val: u8| -> String {
-            modes.iter().find(|m| m.value == val as u32).map(|m| m.name.clone()).unwrap_or_default()
+            modes
+                .iter()
+                .find(|m| m.value == val as u32)
+                .map(|m| m.name.clone())
+                .unwrap_or_default()
         };
 
         let state_str = match state.state {
@@ -766,44 +788,65 @@ impl HqpAdapter {
             settings: PipelineSettings {
                 mode: PipelineSetting {
                     selected: SelectedOption {
-                        value: modes.iter().find(|m| m.index == state.mode as u32)
-                            .map(|m| m.value.to_string()).unwrap_or_else(|| state.mode.to_string()),
+                        value: modes
+                            .iter()
+                            .find(|m| m.index == state.mode as u32)
+                            .map(|m| m.value.to_string())
+                            .unwrap_or_else(|| state.mode.to_string()),
                         label: get_mode_by_index(state.mode),
                     },
-                    options: modes.iter().map(|m| SelectOption {
-                        value: m.value.to_string(),
-                        label: m.name.clone(),
-                    }).collect(),
+                    options: modes
+                        .iter()
+                        .map(|m| SelectOption {
+                            value: m.value.to_string(),
+                            label: m.name.clone(),
+                        })
+                        .collect(),
                 },
                 filter1x: PipelineSetting {
                     selected: SelectedOption {
-                        value: filter1x_obj.map(|f| f.value.to_string()).unwrap_or_else(|| filter1x_idx.to_string()),
+                        value: filter1x_obj
+                            .map(|f| f.value.to_string())
+                            .unwrap_or_else(|| filter1x_idx.to_string()),
                         label: filter1x_obj.map(|f| f.name.clone()).unwrap_or_default(),
                     },
-                    options: filters.iter().map(|f| SelectOption {
-                        value: f.value.to_string(),
-                        label: f.name.clone(),
-                    }).collect(),
+                    options: filters
+                        .iter()
+                        .map(|f| SelectOption {
+                            value: f.value.to_string(),
+                            label: f.name.clone(),
+                        })
+                        .collect(),
                 },
                 filter_nx: PipelineSetting {
                     selected: SelectedOption {
-                        value: filter_nx_obj.map(|f| f.value.to_string()).unwrap_or_else(|| filter_nx_idx.to_string()),
+                        value: filter_nx_obj
+                            .map(|f| f.value.to_string())
+                            .unwrap_or_else(|| filter_nx_idx.to_string()),
                         label: filter_nx_obj.map(|f| f.name.clone()).unwrap_or_default(),
                     },
-                    options: filters.iter().map(|f| SelectOption {
-                        value: f.value.to_string(),
-                        label: f.name.clone(),
-                    }).collect(),
+                    options: filters
+                        .iter()
+                        .map(|f| SelectOption {
+                            value: f.value.to_string(),
+                            label: f.name.clone(),
+                        })
+                        .collect(),
                 },
                 shaper: PipelineSetting {
                     selected: SelectedOption {
-                        value: shaper_obj.map(|s| s.value.to_string()).unwrap_or_else(|| shaper_idx.to_string()),
+                        value: shaper_obj
+                            .map(|s| s.value.to_string())
+                            .unwrap_or_else(|| shaper_idx.to_string()),
                         label: shaper_obj.map(|s| s.name.clone()).unwrap_or_default(),
                     },
-                    options: shapers.iter().map(|s| SelectOption {
-                        value: s.value.to_string(),
-                        label: s.name.clone(),
-                    }).collect(),
+                    options: shapers
+                        .iter()
+                        .map(|s| SelectOption {
+                            value: s.value.to_string(),
+                            label: s.name.clone(),
+                        })
+                        .collect(),
                 },
                 samplerate: PipelineSetting {
                     selected: SelectedOption {
@@ -811,14 +854,24 @@ impl HqpAdapter {
                         label: if state.rate == 0 {
                             "Auto".to_string()
                         } else {
-                            rates.iter().find(|r| r.index == state.rate)
-                                .map(|r| r.rate.to_string()).unwrap_or_else(|| "Auto".to_string())
+                            rates
+                                .iter()
+                                .find(|r| r.index == state.rate)
+                                .map(|r| r.rate.to_string())
+                                .unwrap_or_else(|| "Auto".to_string())
                         },
                     },
-                    options: rates.iter().map(|r| SelectOption {
-                        value: r.index.to_string(),
-                        label: if r.index == 0 { "Auto".to_string() } else { r.rate.to_string() },
-                    }).collect(),
+                    options: rates
+                        .iter()
+                        .map(|r| SelectOption {
+                            value: r.index.to_string(),
+                            label: if r.index == 0 {
+                                "Auto".to_string()
+                            } else {
+                                r.rate.to_string()
+                            },
+                        })
+                        .collect(),
                 },
             },
         })
@@ -831,7 +884,10 @@ impl HqpAdapter {
     /// Get web base URL
     async fn web_base_url(&self) -> Result<String> {
         let state = self.state.read().await;
-        let host = state.host.as_ref().ok_or_else(|| anyhow!("HQPlayer host not configured"))?;
+        let host = state
+            .host
+            .as_ref()
+            .ok_or_else(|| anyhow!("HQPlayer host not configured"))?;
         Ok(format!("http://{}:{}", host, state.web_port))
     }
 
@@ -872,7 +928,10 @@ impl HqpAdapter {
 
         let response = if !qop.is_empty() {
             let qop_value = qop.split(',').next().unwrap_or("auth").trim();
-            Self::md5_hash(&format!("{}:{}:{}:{}:{}:{}", ha1, nonce, nc, cnonce, qop_value, ha2))
+            Self::md5_hash(&format!(
+                "{}:{}:{}:{}:{}:{}",
+                ha1, nonce, nc, cnonce, qop_value, ha2
+            ))
         } else {
             Self::md5_hash(&format!("{}:{}:{}", ha1, nonce, ha2))
         };
@@ -904,7 +963,9 @@ impl HqpAdapter {
     async fn parse_digest_challenge(&self, header: &str) {
         let mut state = self.state.write().await;
 
-        let challenge = header.trim_start_matches("Digest ").trim_start_matches("digest ");
+        let challenge = header
+            .trim_start_matches("Digest ")
+            .trim_start_matches("digest ");
         let mut realm = String::new();
         let mut nonce = String::new();
         let mut qop = String::new();
@@ -1014,12 +1075,14 @@ impl HqpAdapter {
             let tag = &cap[0];
             let name = &cap[1];
 
-            let input_type = type_re.captures(tag)
+            let input_type = type_re
+                .captures(tag)
                 .map(|c| c[1].to_lowercase())
                 .unwrap_or_default();
 
             if input_type == "hidden" || name == "_xsrf" {
-                let value = value_re.captures(tag)
+                let value = value_re
+                    .captures(tag)
                     .map(|c| c[1].to_string())
                     .unwrap_or_default();
                 fields.insert(name.to_string(), value);
@@ -1033,7 +1096,9 @@ impl HqpAdapter {
     fn parse_profiles_from_html(html: &str) -> Vec<HqpProfile> {
         let mut profiles = Vec::new();
 
-        let select_re = Regex::new(r#"<select[^>]*name\s*=\s*["']profile["'][^>]*>([\s\S]*?)</select>"#).unwrap();
+        let select_re =
+            Regex::new(r#"<select[^>]*name\s*=\s*["']profile["'][^>]*>([\s\S]*?)</select>"#)
+                .unwrap();
         let option_re = Regex::new(r#"<option([^>]*)>([\s\S]*?)</option>"#).unwrap();
         let value_re = Regex::new(r#"value\s*=\s*["']([^"']*)["']"#).unwrap();
 
@@ -1044,16 +1109,25 @@ impl HqpAdapter {
                 let attrs = &opt_cap[1];
                 let text = opt_cap[2].trim();
 
-                let value = value_re.captures(attrs)
+                let value = value_re
+                    .captures(attrs)
                     .map(|c| c[1].to_string())
                     .unwrap_or_else(|| text.to_string());
 
                 // Skip default/empty profiles
-                let slug: String = value.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+                let slug: String = value
+                    .to_lowercase()
+                    .chars()
+                    .filter(|c| c.is_alphanumeric())
+                    .collect();
                 if !value.is_empty() && !slug.is_empty() && slug != "default" {
                     profiles.push(HqpProfile {
                         value: value.trim().to_string(),
-                        title: if text.is_empty() { value.clone() } else { text.to_string() },
+                        title: if text.is_empty() {
+                            value.clone()
+                        } else {
+                            text.to_string()
+                        },
                     });
                 }
             }
@@ -1110,13 +1184,15 @@ impl HqpAdapter {
         // Build form body
         let body = {
             let state = self.state.read().await;
-            let mut params: Vec<(String, String)> = state.hidden_fields
+            let mut params: Vec<(String, String)> = state
+                .hidden_fields
                 .iter()
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
             params.push(("profile".to_string(), profile_value.to_string()));
 
-            params.iter()
+            params
+                .iter()
                 .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
                 .collect::<Vec<_>>()
                 .join("&")
@@ -1125,7 +1201,9 @@ impl HqpAdapter {
         let base_url = self.web_base_url().await?;
 
         // POST with proper headers
-        let mut request = self.http_client.post(&format!("{}{}", base_url, PROFILE_PATH))
+        let mut request = self
+            .http_client
+            .post(&format!("{}{}", base_url, PROFILE_PATH))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .header("Origin", &base_url)
             .header("Referer", &format!("{}{}", base_url, PROFILE_PATH));
@@ -1142,12 +1220,15 @@ impl HqpAdapter {
                 if let Ok(header_str) = auth_header.to_str() {
                     self.parse_digest_challenge(header_str).await;
 
-                    let mut request = self.http_client.post(&format!("{}{}", base_url, PROFILE_PATH))
+                    let mut request = self
+                        .http_client
+                        .post(&format!("{}{}", base_url, PROFILE_PATH))
                         .header("Content-Type", "application/x-www-form-urlencoded")
                         .header("Origin", &base_url)
                         .header("Referer", &format!("{}{}", base_url, PROFILE_PATH));
 
-                    if let Some(auth_header) = self.build_digest_header("POST", PROFILE_PATH).await {
+                    if let Some(auth_header) = self.build_digest_header("POST", PROFILE_PATH).await
+                    {
                         request = request.header("Authorization", auth_header);
                     }
 
@@ -1171,7 +1252,9 @@ impl HqpAdapter {
     /// Check if this is HQPlayer Embedded (supports profiles)
     pub async fn is_embedded(&self) -> bool {
         let state = self.state.read().await;
-        state.info.as_ref()
+        state
+            .info
+            .as_ref()
             .map(|i| i.product.to_lowercase().contains("embedded"))
             .unwrap_or(false)
     }

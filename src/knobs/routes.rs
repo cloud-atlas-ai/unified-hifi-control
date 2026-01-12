@@ -13,14 +13,14 @@ use axum::{
     body::Body,
     extract::{Query, State},
     http::{header, HeaderMap, StatusCode},
-    response::{IntoResponse, Response},
+    response::Response,
     Json,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
-use crate::knobs::image::{jpeg_to_rgb565, placeholder_svg, resize_jpeg};
-use crate::knobs::store::{KnobConfigUpdate, KnobStatusUpdate, KnobStore};
+use crate::knobs::image::placeholder_svg;
+use crate::knobs::store::{KnobConfigUpdate, KnobStatusUpdate};
 
 /// Extract knob ID from headers or query params
 fn extract_knob_id(headers: &HeaderMap, query_knob_id: Option<&str>) -> Option<String> {
@@ -103,28 +103,42 @@ pub struct NowPlayingResponse {
     pub config_sha: Option<String>,
 }
 
+/// Helper to build zone info list for error responses
+async fn get_zone_infos(state: &AppState) -> Vec<ZoneInfo> {
+    state
+        .roon
+        .get_zones()
+        .await
+        .into_iter()
+        .map(|z| ZoneInfo {
+            zone_id: z.zone_id,
+            display_name: z.display_name,
+            state: z.state,
+        })
+        .collect()
+}
+
 /// GET /knob/now_playing - Get current playback state
 pub async fn knob_now_playing_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(params): Query<NowPlayingQuery>,
 ) -> Result<Json<NowPlayingResponse>, (StatusCode, Json<serde_json::Value>)> {
-    let zone_id = params.zone_id.ok_or_else(|| {
-        let zones = futures::executor::block_on(state.roon.get_zones());
-        let zone_infos: Vec<ZoneInfo> = zones.into_iter().map(|z| ZoneInfo {
-            zone_id: z.zone_id,
-            display_name: z.display_name,
-            state: z.state,
-        }).collect();
-        (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({
-                "error": "zone_id required",
-                "error_code": "MISSING_ZONE_ID",
-                "zones": zone_infos
-            })),
-        )
-    })?;
+    // Check zone_id first (avoid block_on by restructuring)
+    let zone_id = match params.zone_id {
+        Some(id) => id,
+        None => {
+            let zone_infos = get_zone_infos(&state).await;
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": "zone_id required",
+                    "error_code": "MISSING_ZONE_ID",
+                    "zones": zone_infos
+                })),
+            ));
+        }
+    };
 
     // Update knob status if knob ID present
     let knob_id = extract_knob_id(&headers, params.knob_id.as_deref());
@@ -152,33 +166,37 @@ pub async fn knob_now_playing_handler(
         config_sha = state.knobs.get_config_sha(id).await;
     }
 
-    // Get zone data
-    let zone = state.roon.get_zone(&zone_id).await.ok_or_else(|| {
-        let zones = futures::executor::block_on(state.roon.get_zones());
-        let zone_infos: Vec<ZoneInfo> = zones.into_iter().map(|z| ZoneInfo {
+    // Get zone data (avoid block_on by restructuring)
+    let zone = match state.roon.get_zone(&zone_id).await {
+        Some(z) => z,
+        None => {
+            let zone_infos = get_zone_infos(&state).await;
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({
+                    "error": "zone not found",
+                    "error_code": "ZONE_NOT_FOUND",
+                    "zones": zone_infos
+                })),
+            ));
+        }
+    };
+
+    let np = zone.now_playing;
+    let image_url = format!(
+        "/knob/now_playing/image?zone_id={}",
+        urlencoding::encode(&zone_id)
+    );
+
+    let all_zones = state.roon.get_zones().await;
+    let zone_infos: Vec<ZoneInfo> = all_zones
+        .into_iter()
+        .map(|z| ZoneInfo {
             zone_id: z.zone_id,
             display_name: z.display_name,
             state: z.state,
-        }).collect();
-        (
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({
-                "error": "zone not found",
-                "error_code": "ZONE_NOT_FOUND",
-                "zones": zone_infos
-            })),
-        )
-    })?;
-
-    let np = zone.now_playing;
-    let image_url = format!("/knob/now_playing/image?zone_id={}", urlencoding::encode(&zone_id));
-
-    let all_zones = state.roon.get_zones().await;
-    let zone_infos: Vec<ZoneInfo> = all_zones.into_iter().map(|z| ZoneInfo {
-        zone_id: z.zone_id,
-        display_name: z.display_name,
-        state: z.state,
-    }).collect();
+        })
+        .collect();
 
     Ok(Json(NowPlayingResponse {
         zone_id: zone.zone_id,
@@ -284,30 +302,69 @@ pub async fn knob_control_handler(
         "stop" => "stop",
         "vol_up" | "volume_up" => {
             // Handle relative volume
-            if let Some(output) = get_first_output_id(&state, &req.zone_id).await {
-                let step = req.value.as_ref()
-                    .and_then(|v| v.as_i64())
-                    .unwrap_or(1) as i32;
-                let _ = state.roon.change_volume(&output, step, true).await;
-            }
+            let output = get_first_output_id(&state, &req.zone_id)
+                .await
+                .ok_or_else(|| {
+                    (
+                        StatusCode::NOT_FOUND,
+                        Json(serde_json::json!({"error": "no outputs in zone"})),
+                    )
+                })?;
+            let step = req.value.as_ref().and_then(|v| v.as_i64()).unwrap_or(1) as i32;
+            state
+                .roon
+                .change_volume(&output, step, true)
+                .await
+                .map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"error": e.to_string()})),
+                    )
+                })?;
             return Ok(Json(serde_json::json!({"ok": true})));
         }
         "vol_down" | "volume_down" => {
-            if let Some(output) = get_first_output_id(&state, &req.zone_id).await {
-                let step = req.value.as_ref()
-                    .and_then(|v| v.as_i64())
-                    .unwrap_or(1) as i32;
-                let _ = state.roon.change_volume(&output, -step, true).await;
-            }
+            let output = get_first_output_id(&state, &req.zone_id)
+                .await
+                .ok_or_else(|| {
+                    (
+                        StatusCode::NOT_FOUND,
+                        Json(serde_json::json!({"error": "no outputs in zone"})),
+                    )
+                })?;
+            let step = req.value.as_ref().and_then(|v| v.as_i64()).unwrap_or(1) as i32;
+            state
+                .roon
+                .change_volume(&output, -step, true)
+                .await
+                .map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"error": e.to_string()})),
+                    )
+                })?;
             return Ok(Json(serde_json::json!({"ok": true})));
         }
         "vol_abs" | "volume" => {
-            if let Some(output) = get_first_output_id(&state, &req.zone_id).await {
-                let value = req.value.as_ref()
-                    .and_then(|v| v.as_i64())
-                    .unwrap_or(50) as i32;
-                let _ = state.roon.change_volume(&output, value, false).await;
-            }
+            let output = get_first_output_id(&state, &req.zone_id)
+                .await
+                .ok_or_else(|| {
+                    (
+                        StatusCode::NOT_FOUND,
+                        Json(serde_json::json!({"error": "no outputs in zone"})),
+                    )
+                })?;
+            let value = req.value.as_ref().and_then(|v| v.as_i64()).unwrap_or(50) as i32;
+            state
+                .roon
+                .change_volume(&output, value, false)
+                .await
+                .map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"error": e.to_string()})),
+                    )
+                })?;
             return Ok(Json(serde_json::json!({"ok": true})));
         }
         _ => {
@@ -339,17 +396,19 @@ pub async fn knob_config_handler(
     headers: HeaderMap,
     Query(params): Query<KnobIdQuery>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    let knob_id = extract_knob_id(&headers, params.knob_id.as_deref())
-        .ok_or_else(|| (
+    let knob_id = extract_knob_id(&headers, params.knob_id.as_deref()).ok_or_else(|| {
+        (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({"error": "knob_id required"})),
-        ))?;
+        )
+    })?;
 
-    let knob = state.knobs.get(&knob_id).await
-        .ok_or_else(|| (
+    let knob = state.knobs.get(&knob_id).await.ok_or_else(|| {
+        (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({"error": "knob not found"})),
-        ))?;
+        )
+    })?;
 
     Ok(Json(serde_json::json!({
         "knob_id": knob_id,
@@ -371,17 +430,23 @@ pub async fn knob_config_update_handler(
     Query(params): Query<KnobIdQuery>,
     Json(updates): Json<KnobConfigUpdate>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    let knob_id = extract_knob_id(&headers, params.knob_id.as_deref())
-        .ok_or_else(|| (
+    let knob_id = extract_knob_id(&headers, params.knob_id.as_deref()).ok_or_else(|| {
+        (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({"error": "knob_id required"})),
-        ))?;
+        )
+    })?;
 
-    let knob = state.knobs.update_config(&knob_id, updates).await
-        .ok_or_else(|| (
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({"error": "knob not found"})),
-        ))?;
+    let knob = state
+        .knobs
+        .update_config(&knob_id, updates)
+        .await
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": "knob not found"})),
+            )
+        })?;
 
     Ok(Json(serde_json::json!({
         "ok": true,
@@ -390,9 +455,7 @@ pub async fn knob_config_update_handler(
 }
 
 /// GET /knob/devices - List all registered knobs (admin)
-pub async fn knob_devices_handler(
-    State(state): State<AppState>,
-) -> Json<serde_json::Value> {
+pub async fn knob_devices_handler(State(state): State<AppState>) -> Json<serde_json::Value> {
     let knobs = state.knobs.list().await;
     Json(serde_json::json!({ "knobs": knobs }))
 }

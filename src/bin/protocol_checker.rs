@@ -173,10 +173,19 @@ struct LmsPlayer {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
 enum BusEvent {
-    RoonConnected { core_name: String, version: String },
+    RoonConnected {
+        core_name: String,
+        version: String,
+    },
     RoonDisconnected,
-    ZoneUpdated { zone_id: String, display_name: String, state: String },
-    ZoneRemoved { zone_id: String },
+    ZoneUpdated {
+        zone_id: String,
+        display_name: String,
+        state: String,
+    },
+    ZoneRemoved {
+        zone_id: String,
+    },
     NowPlayingChanged {
         zone_id: String,
         title: Option<String>,
@@ -184,20 +193,41 @@ enum BusEvent {
         album: Option<String>,
         image_key: Option<String>,
     },
-    SeekPositionChanged { zone_id: String, position: i64 },
-    VolumeChanged { output_id: String, value: f32, is_muted: bool },
-    HqpConnected { host: String },
-    HqpDisconnected { host: String },
-    HqpStateChanged { host: String, state: String },
+    SeekPositionChanged {
+        zone_id: String,
+        position: i64,
+    },
+    VolumeChanged {
+        output_id: String,
+        value: f32,
+        is_muted: bool,
+    },
+    HqpConnected {
+        host: String,
+    },
+    HqpDisconnected {
+        host: String,
+    },
+    HqpStateChanged {
+        host: String,
+        state: String,
+    },
     HqpPipelineChanged {
         host: String,
         filter: Option<String>,
         shaper: Option<String>,
         rate: Option<String>,
     },
-    LmsConnected { host: String },
-    LmsDisconnected { host: String },
-    LmsPlayerStateChanged { player_id: String, state: String },
+    LmsConnected {
+        host: String,
+    },
+    LmsDisconnected {
+        host: String,
+    },
+    LmsPlayerStateChanged {
+        player_id: String,
+        state: String,
+    },
     ControlCommand {
         zone_id: String,
         action: String,
@@ -294,7 +324,9 @@ fn print_usage() {
 
 fn read_stdin() -> String {
     let mut input = String::new();
-    io::stdin().read_to_string(&mut input).expect("Failed to read stdin");
+    io::stdin()
+        .read_to_string(&mut input)
+        .expect("Failed to read stdin");
     input
 }
 
@@ -345,7 +377,10 @@ fn validate(schema_type: &str, json: &str) {
             println!("VALID: JSON conforms to '{}' schema", schema_type);
         }
         Err(e) => {
-            eprintln!("INVALID: Schema validation failed for '{}': {}", schema_type, e);
+            eprintln!(
+                "INVALID: Schema validation failed for '{}': {}",
+                schema_type, e
+            );
             process::exit(1);
         }
     }
@@ -435,33 +470,49 @@ fn generate_example(schema_type: &str) {
         "bus-event" => {
             // Show multiple examples for bus events
             println!("// RoonConnected event:");
-            println!("{}", serde_json::to_string_pretty(&BusEvent::RoonConnected {
-                core_name: "Roon Core".to_string(),
-                version: "2.0.0".to_string(),
-            }).unwrap());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&BusEvent::RoonConnected {
+                    core_name: "Roon Core".to_string(),
+                    version: "2.0.0".to_string(),
+                })
+                .unwrap()
+            );
             println!();
             println!("// ZoneUpdated event:");
-            println!("{}", serde_json::to_string_pretty(&BusEvent::ZoneUpdated {
-                zone_id: "zone-1".to_string(),
-                display_name: "Living Room".to_string(),
-                state: "playing".to_string(),
-            }).unwrap());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&BusEvent::ZoneUpdated {
+                    zone_id: "zone-1".to_string(),
+                    display_name: "Living Room".to_string(),
+                    state: "playing".to_string(),
+                })
+                .unwrap()
+            );
             println!();
             println!("// NowPlayingChanged event:");
-            println!("{}", serde_json::to_string_pretty(&BusEvent::NowPlayingChanged {
-                zone_id: "zone-1".to_string(),
-                title: Some("Test Song".to_string()),
-                artist: Some("Test Artist".to_string()),
-                album: Some("Test Album".to_string()),
-                image_key: Some("img-key".to_string()),
-            }).unwrap());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&BusEvent::NowPlayingChanged {
+                    zone_id: "zone-1".to_string(),
+                    title: Some("Test Song".to_string()),
+                    artist: Some("Test Artist".to_string()),
+                    album: Some("Test Album".to_string()),
+                    image_key: Some("img-key".to_string()),
+                })
+                .unwrap()
+            );
             println!();
             println!("// VolumeChanged event:");
-            println!("{}", serde_json::to_string_pretty(&BusEvent::VolumeChanged {
-                output_id: "output-1".to_string(),
-                value: 75.0,
-                is_muted: false,
-            }).unwrap());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&BusEvent::VolumeChanged {
+                    output_id: "output-1".to_string(),
+                    value: 75.0,
+                    is_muted: false,
+                })
+                .unwrap()
+            );
             return;
         }
         _ => {

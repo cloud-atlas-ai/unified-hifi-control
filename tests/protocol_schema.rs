@@ -96,10 +96,19 @@ struct ErrorResponse {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
 enum BusEvent {
-    RoonConnected { core_name: String, version: String },
+    RoonConnected {
+        core_name: String,
+        version: String,
+    },
     RoonDisconnected,
-    ZoneUpdated { zone_id: String, display_name: String, state: String },
-    ZoneRemoved { zone_id: String },
+    ZoneUpdated {
+        zone_id: String,
+        display_name: String,
+        state: String,
+    },
+    ZoneRemoved {
+        zone_id: String,
+    },
     NowPlayingChanged {
         zone_id: String,
         title: Option<String>,
@@ -107,20 +116,41 @@ enum BusEvent {
         album: Option<String>,
         image_key: Option<String>,
     },
-    SeekPositionChanged { zone_id: String, position: i64 },
-    VolumeChanged { output_id: String, value: f32, is_muted: bool },
-    HqpConnected { host: String },
-    HqpDisconnected { host: String },
-    HqpStateChanged { host: String, state: String },
+    SeekPositionChanged {
+        zone_id: String,
+        position: i64,
+    },
+    VolumeChanged {
+        output_id: String,
+        value: f32,
+        is_muted: bool,
+    },
+    HqpConnected {
+        host: String,
+    },
+    HqpDisconnected {
+        host: String,
+    },
+    HqpStateChanged {
+        host: String,
+        state: String,
+    },
     HqpPipelineChanged {
         host: String,
         filter: Option<String>,
         shaper: Option<String>,
         rate: Option<String>,
     },
-    LmsConnected { host: String },
-    LmsDisconnected { host: String },
-    LmsPlayerStateChanged { player_id: String, state: String },
+    LmsConnected {
+        host: String,
+    },
+    LmsDisconnected {
+        host: String,
+    },
+    LmsPlayerStateChanged {
+        player_id: String,
+        state: String,
+    },
     ControlCommand {
         zone_id: String,
         action: String,
@@ -146,7 +176,11 @@ mod status_schema {
         });
 
         let result: Result<StatusResponse, _> = serde_json::from_value(json);
-        assert!(result.is_ok(), "StatusResponse should deserialize: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "StatusResponse should deserialize: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -174,7 +208,11 @@ mod roon_status_schema {
         });
 
         let result: Result<RoonStatus, _> = serde_json::from_value(json);
-        assert!(result.is_ok(), "RoonStatus should deserialize: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "RoonStatus should deserialize: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -187,7 +225,11 @@ mod roon_status_schema {
         });
 
         let result: Result<RoonStatus, _> = serde_json::from_value(json);
-        assert!(result.is_ok(), "Disconnected status should deserialize: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Disconnected status should deserialize: {:?}",
+            result.err()
+        );
     }
 }
 
@@ -225,7 +267,11 @@ mod zone_schema {
         });
 
         let result: Result<Zone, _> = serde_json::from_value(json);
-        assert!(result.is_ok(), "Full zone should deserialize: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Full zone should deserialize: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -243,7 +289,11 @@ mod zone_schema {
         });
 
         let result: Result<Zone, _> = serde_json::from_value(json);
-        assert!(result.is_ok(), "Minimal zone should deserialize: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Minimal zone should deserialize: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -264,7 +314,12 @@ mod zone_schema {
             });
 
             let result: Result<Zone, _> = serde_json::from_value(json);
-            assert!(result.is_ok(), "State '{}' should be valid: {:?}", state, result.err());
+            assert!(
+                result.is_ok(),
+                "State '{}' should be valid: {:?}",
+                state,
+                result.err()
+            );
         }
     }
 }
@@ -280,7 +335,11 @@ mod control_request_schema {
         });
 
         let result: Result<ControlRequest, _> = serde_json::from_value(json);
-        assert!(result.is_ok(), "ControlRequest should deserialize: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "ControlRequest should deserialize: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -306,7 +365,12 @@ mod control_request_schema {
             });
 
             let result: Result<ControlRequest, _> = serde_json::from_value(json);
-            assert!(result.is_ok(), "Action '{}' should be valid: {:?}", action, result.err());
+            assert!(
+                result.is_ok(),
+                "Action '{}' should be valid: {:?}",
+                action,
+                result.err()
+            );
         }
     }
 }
@@ -323,7 +387,11 @@ mod volume_request_schema {
         });
 
         let result: Result<VolumeRequest, _> = serde_json::from_value(json);
-        assert!(result.is_ok(), "Absolute volume should deserialize: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Absolute volume should deserialize: {:?}",
+            result.err()
+        );
 
         let req = result.unwrap();
         assert_eq!(req.value, 50);
@@ -339,7 +407,11 @@ mod volume_request_schema {
         });
 
         let result: Result<VolumeRequest, _> = serde_json::from_value(json);
-        assert!(result.is_ok(), "Relative volume should deserialize: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Relative volume should deserialize: {:?}",
+            result.err()
+        );
 
         let req = result.unwrap();
         assert_eq!(req.value, -5);
@@ -488,9 +560,16 @@ mod bus_event_schema {
     #[test]
     fn validates_hqp_events() {
         let events = vec![
-            BusEvent::HqpConnected { host: "192.168.1.100".to_string() },
-            BusEvent::HqpDisconnected { host: "192.168.1.100".to_string() },
-            BusEvent::HqpStateChanged { host: "192.168.1.100".to_string(), state: "playing".to_string() },
+            BusEvent::HqpConnected {
+                host: "192.168.1.100".to_string(),
+            },
+            BusEvent::HqpDisconnected {
+                host: "192.168.1.100".to_string(),
+            },
+            BusEvent::HqpStateChanged {
+                host: "192.168.1.100".to_string(),
+                state: "playing".to_string(),
+            },
             BusEvent::HqpPipelineChanged {
                 host: "192.168.1.100".to_string(),
                 filter: Some("poly-sinc-xtr".to_string()),
@@ -508,11 +587,15 @@ mod bus_event_schema {
     #[test]
     fn validates_lms_events() {
         let events = vec![
-            BusEvent::LmsConnected { host: "192.168.1.101".to_string() },
-            BusEvent::LmsDisconnected { host: "192.168.1.101".to_string() },
+            BusEvent::LmsConnected {
+                host: "192.168.1.101".to_string(),
+            },
+            BusEvent::LmsDisconnected {
+                host: "192.168.1.101".to_string(),
+            },
             BusEvent::LmsPlayerStateChanged {
                 player_id: "aa:bb:cc:dd:ee:ff".to_string(),
-                state: "play".to_string()
+                state: "play".to_string(),
             },
         ];
 
@@ -556,8 +639,8 @@ mod contract_tests {
         });
 
         // Validate against our schema
-        let _: StatusResponse = serde_json::from_value(response)
-            .expect("Status response should match contract");
+        let _: StatusResponse =
+            serde_json::from_value(response).expect("Status response should match contract");
     }
 
     /// Test SSE event format matches client expectations
@@ -576,8 +659,8 @@ mod contract_tests {
 
         // Extract the JSON from SSE format
         let data = sse_line.strip_prefix("data: ").unwrap().trim();
-        let _: BusEvent = serde_json::from_str(data)
-            .expect("SSE data should be valid BusEvent JSON");
+        let _: BusEvent =
+            serde_json::from_str(data).expect("SSE data should be valid BusEvent JSON");
     }
 
     /// Test that zone list is an array of valid zones
@@ -615,8 +698,8 @@ mod contract_tests {
             }
         ]);
 
-        let zones: Vec<Zone> = serde_json::from_value(response)
-            .expect("Zones list should match contract");
+        let zones: Vec<Zone> =
+            serde_json::from_value(response).expect("Zones list should match contract");
         assert_eq!(zones.len(), 2);
     }
 }

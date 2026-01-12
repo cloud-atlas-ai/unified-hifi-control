@@ -18,13 +18,18 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 async fn main() -> Result<()> {
     // Initialize logging
     tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            "unified_hifi_control=debug,tower_http=debug,roon_api=info".into()
-        }))
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                "unified_hifi_control=debug,tower_http=debug,roon_api=info".into()
+            }),
+        )
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    tracing::info!("Starting Unified Hi-Fi Control (Rust) v{}", env!("CARGO_PKG_VERSION"));
+    tracing::info!(
+        "Starting Unified Hi-Fi Control (Rust) v{}",
+        env!("CARGO_PKG_VERSION")
+    );
 
     // Load configuration
     let config = config::load_config()?;
@@ -41,13 +46,15 @@ async fn main() -> Result<()> {
     // Initialize HQPlayer adapter
     let hqplayer = Arc::new(adapters::hqplayer::HqpAdapter::new(bus.clone()));
     if let Some(ref hqp_config) = config.hqplayer {
-        hqplayer.configure(
-            hqp_config.host.clone(),
-            Some(hqp_config.port),
-            None,
-            hqp_config.username.clone(),
-            hqp_config.password.clone(),
-        ).await;
+        hqplayer
+            .configure(
+                hqp_config.host.clone(),
+                Some(hqp_config.port),
+                None,
+                hqp_config.username.clone(),
+                hqp_config.password.clone(),
+            )
+            .await;
         tracing::info!("HQPlayer adapter configured for {}", hqp_config.host);
     }
 
@@ -59,7 +66,8 @@ async fn main() -> Result<()> {
             Some(lms_config.port),
             lms_config.username.clone(),
             lms_config.password.clone(),
-        ).await;
+        )
+        .await;
 
         // Start LMS polling
         if let Err(e) = lms.start().await {
@@ -78,7 +86,8 @@ async fn main() -> Result<()> {
             mqtt_config.username.clone(),
             mqtt_config.password.clone(),
             mqtt_config.topic_prefix.clone(),
-        ).await;
+        )
+        .await;
 
         if let Err(e) = mqtt.start().await {
             tracing::warn!("Failed to start MQTT adapter: {}", e);
@@ -109,7 +118,16 @@ async fn main() -> Result<()> {
     tracing::info!("Knob store initialized");
 
     // Build application state
-    let state = api::AppState::new(roon, hqplayer, lms, mqtt, openhome, upnp, knob_store, bus.clone());
+    let state = api::AppState::new(
+        roon,
+        hqplayer,
+        lms,
+        mqtt,
+        openhome,
+        upnp,
+        knob_store,
+        bus.clone(),
+    );
 
     // Build API routes
     let app = Router::new()
@@ -138,12 +156,18 @@ async fn main() -> Result<()> {
         // OpenHome routes
         .route("/openhome/status", get(api::openhome_status_handler))
         .route("/openhome/zones", get(api::openhome_zones_handler))
-        .route("/openhome/zone/:zone_id/now_playing", get(api::openhome_now_playing_handler))
+        .route(
+            "/openhome/zone/:zone_id/now_playing",
+            get(api::openhome_now_playing_handler),
+        )
         .route("/openhome/control", post(api::openhome_control_handler))
         // UPnP routes
         .route("/upnp/status", get(api::upnp_status_handler))
         .route("/upnp/zones", get(api::upnp_zones_handler))
-        .route("/upnp/zone/:zone_id/now_playing", get(api::upnp_now_playing_handler))
+        .route(
+            "/upnp/zone/:zone_id/now_playing",
+            get(api::upnp_now_playing_handler),
+        )
         .route("/upnp/control", post(api::upnp_control_handler))
         // Event stream (SSE)
         .route("/events", get(api::events_handler))

@@ -158,11 +158,7 @@ impl UPnPAdapter {
         Ok(())
     }
 
-    async fn discovery_loop(
-        state: Arc<RwLock<UPnPState>>,
-        bus: SharedBus,
-        http: Client,
-    ) {
+    async fn discovery_loop(state: Arc<RwLock<UPnPState>>, bus: SharedBus, http: Client) {
         let mut search_interval = interval(SSDP_SEARCH_INTERVAL);
 
         loop {
@@ -194,7 +190,8 @@ impl UPnPAdapter {
     ) -> anyhow::Result<()> {
         let urn: URN = MEDIA_RENDERER_URN.parse()?;
         let search_target = SearchTarget::URN(urn);
-        let responses = ssdp_client::search(&search_target, Duration::from_secs(3), 2, None).await?;
+        let responses =
+            ssdp_client::search(&search_target, Duration::from_secs(3), 2, None).await?;
 
         futures::pin_mut!(responses);
 
@@ -250,7 +247,9 @@ impl UPnPAdapter {
             let uuid_clone = uuid.clone();
 
             tokio::spawn(async move {
-                if let Err(e) = Self::fetch_device_info(&state_clone, &http_clone, &uuid_clone, &location).await {
+                if let Err(e) =
+                    Self::fetch_device_info(&state_clone, &http_clone, &uuid_clone, &location).await
+                {
                     tracing::warn!("Failed to fetch device info for {}: {}", uuid_clone, e);
                 }
                 bus_clone.publish(BusEvent::ZoneUpdated {
@@ -310,7 +309,9 @@ impl UPnPAdapter {
 
         let mut s = state.write().await;
         if let Some(renderer) = s.renderers.get_mut(uuid) {
-            renderer.name = root.device.friendly_name
+            renderer.name = root
+                .device
+                .friendly_name
                 .unwrap_or_else(|| format!("Renderer {}", &uuid[..8.min(uuid.len())]));
             renderer.manufacturer = root.device.manufacturer;
             renderer.model = root.device.model_name;
@@ -345,7 +346,8 @@ impl UPnPAdapter {
         let mut s = state.write().await;
         let now = std::time::Instant::now();
 
-        let stale: Vec<String> = s.renderers
+        let stale: Vec<String> = s
+            .renderers
             .iter()
             .filter(|(_, r)| now.duration_since(r.last_seen) > STALE_THRESHOLD)
             .map(|(uuid, _)| uuid.clone())
@@ -360,11 +362,7 @@ impl UPnPAdapter {
         }
     }
 
-    async fn poll_loop(
-        state: Arc<RwLock<UPnPState>>,
-        bus: SharedBus,
-        http: Client,
-    ) {
+    async fn poll_loop(state: Arc<RwLock<UPnPState>>, bus: SharedBus, http: Client) {
         let mut poll_interval = interval(POLL_INTERVAL);
 
         loop {
@@ -382,16 +380,27 @@ impl UPnPAdapter {
                 let s = state.read().await;
                 s.renderers
                     .iter()
-                    .map(|(uuid, r)| (
-                        uuid.clone(),
-                        r.av_transport_url.clone(),
-                        r.rendering_control_url.clone(),
-                    ))
+                    .map(|(uuid, r)| {
+                        (
+                            uuid.clone(),
+                            r.av_transport_url.clone(),
+                            r.rendering_control_url.clone(),
+                        )
+                    })
                     .collect()
             };
 
             for (uuid, av_url, rc_url) in renderers {
-                if let Err(e) = Self::poll_renderer(&state, &bus, &http, &uuid, av_url.as_deref(), rc_url.as_deref()).await {
+                if let Err(e) = Self::poll_renderer(
+                    &state,
+                    &bus,
+                    &http,
+                    &uuid,
+                    av_url.as_deref(),
+                    rc_url.as_deref(),
+                )
+                .await
+                {
                     tracing::debug!("Failed to poll {}: {}", uuid, e);
                 }
             }
@@ -416,17 +425,20 @@ impl UPnPAdapter {
                 AV_TRANSPORT_URN,
                 "GetTransportInfo",
                 "<InstanceID>0</InstanceID>",
-            ).await;
+            )
+            .await;
 
             if let Ok(response) = transport_info {
-                if let Some(new_state) = Self::extract_xml_value(&response, "CurrentTransportState") {
+                if let Some(new_state) = Self::extract_xml_value(&response, "CurrentTransportState")
+                {
                     let new_state = match new_state.as_str() {
                         "PLAYING" => "playing",
                         "PAUSED_PLAYBACK" => "paused",
                         "STOPPED" => "stopped",
                         "TRANSITIONING" => "loading",
                         _ => "stopped",
-                    }.to_string();
+                    }
+                    .to_string();
 
                     let mut s = state.write().await;
                     if let Some(renderer) = s.renderers.get_mut(uuid) {
@@ -451,7 +463,8 @@ impl UPnPAdapter {
                 RENDERING_CONTROL_URN,
                 "GetVolume",
                 "<InstanceID>0</InstanceID><Channel>Master</Channel>",
-            ).await;
+            )
+            .await;
 
             if let Ok(response) = volume {
                 if let Some(vol_str) = Self::extract_xml_value(&response, "CurrentVolume") {
@@ -471,7 +484,8 @@ impl UPnPAdapter {
                 RENDERING_CONTROL_URN,
                 "GetMute",
                 "<InstanceID>0</InstanceID><Channel>Master</Channel>",
-            ).await;
+            )
+            .await;
 
             if let Ok(response) = mute {
                 if let Some(mute_str) = Self::extract_xml_value(&response, "CurrentMute") {
@@ -489,7 +503,12 @@ impl UPnPAdapter {
     fn get_base_url(location: &str) -> anyhow::Result<String> {
         let url = url::Url::parse(location)?;
         let port = url.port().map(|p| format!(":{}", p)).unwrap_or_default();
-        Ok(format!("{}://{}{}", url.scheme(), url.host_str().unwrap_or("localhost"), port))
+        Ok(format!(
+            "{}://{}{}",
+            url.scheme(),
+            url.host_str().unwrap_or("localhost"),
+            port
+        ))
     }
 
     async fn soap_call(
@@ -561,35 +580,39 @@ impl UPnPAdapter {
     /// Get all discovered renderers as zones
     pub async fn get_zones(&self) -> Vec<UPnPZone> {
         let state = self.state.read().await;
-        state.renderers.values().map(|r| {
-            let device_name = match (&r.manufacturer, &r.model) {
-                (Some(m), Some(model)) => Some(format!("{} {}", m, model)),
-                (Some(m), None) => Some(m.clone()),
-                _ => None,
-            };
+        state
+            .renderers
+            .values()
+            .map(|r| {
+                let device_name = match (&r.manufacturer, &r.model) {
+                    (Some(m), Some(model)) => Some(format!("{} {}", m, model)),
+                    (Some(m), None) => Some(m.clone()),
+                    _ => None,
+                };
 
-            UPnPZone {
-                zone_id: r.uuid.clone(),
-                zone_name: r.name.clone(),
-                state: r.state.clone(),
-                output_count: 1,
-                output_name: r.name.clone(),
-                device_name,
-                volume_control: r.volume.map(|_| VolumeControl {
-                    vol_type: "number".to_string(),
-                    min: 0,
-                    max: 100,
-                    is_muted: r.muted,
-                }),
-                // Pure UPnP doesn't support these
-                unsupported: vec![
-                    "next".to_string(),
-                    "previous".to_string(),
-                    "track_metadata".to_string(),
-                    "album_art".to_string(),
-                ],
-            }
-        }).collect()
+                UPnPZone {
+                    zone_id: r.uuid.clone(),
+                    zone_name: r.name.clone(),
+                    state: r.state.clone(),
+                    output_count: 1,
+                    output_name: r.name.clone(),
+                    device_name,
+                    volume_control: r.volume.map(|_| VolumeControl {
+                        vol_type: "number".to_string(),
+                        min: 0,
+                        max: 100,
+                        is_muted: r.muted,
+                    }),
+                    // Pure UPnP doesn't support these
+                    unsupported: vec![
+                        "next".to_string(),
+                        "previous".to_string(),
+                        "track_metadata".to_string(),
+                        "album_art".to_string(),
+                    ],
+                }
+            })
+            .collect()
     }
 
     /// Get all discovered renderers
@@ -626,40 +649,60 @@ impl UPnPAdapter {
     }
 
     /// Send control command to a renderer
-    pub async fn control(&self, uuid: &str, action: &str, value: Option<i32>) -> anyhow::Result<()> {
+    pub async fn control(
+        &self,
+        uuid: &str,
+        action: &str,
+        value: Option<i32>,
+    ) -> anyhow::Result<()> {
         let (av_url, rc_url) = {
             let state = self.state.read().await;
-            let renderer = state.renderers.get(uuid)
+            let renderer = state
+                .renderers
+                .get(uuid)
                 .ok_or_else(|| anyhow::anyhow!("Renderer not found: {}", uuid))?;
-            (renderer.av_transport_url.clone(), renderer.rendering_control_url.clone())
+            (
+                renderer.av_transport_url.clone(),
+                renderer.rendering_control_url.clone(),
+            )
         };
 
         match action {
             "play" => {
-                let url = av_url.as_ref().ok_or_else(|| anyhow::anyhow!("No AVTransport URL"))?;
+                let url = av_url
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("No AVTransport URL"))?;
                 Self::soap_call(
                     &self.http,
                     url,
                     AV_TRANSPORT_URN,
                     "Play",
                     "<InstanceID>0</InstanceID><Speed>1</Speed>",
-                ).await?;
+                )
+                .await?;
             }
             "pause" => {
-                let url = av_url.as_ref().ok_or_else(|| anyhow::anyhow!("No AVTransport URL"))?;
+                let url = av_url
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("No AVTransport URL"))?;
                 Self::soap_call(
                     &self.http,
                     url,
                     AV_TRANSPORT_URN,
                     "Pause",
                     "<InstanceID>0</InstanceID>",
-                ).await?;
+                )
+                .await?;
             }
             "play_pause" => {
-                let url = av_url.as_ref().ok_or_else(|| anyhow::anyhow!("No AVTransport URL"))?;
+                let url = av_url
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("No AVTransport URL"))?;
                 let is_playing = {
                     let state = self.state.read().await;
-                    state.renderers.get(uuid)
+                    state
+                        .renderers
+                        .get(uuid)
                         .map(|r| r.state == "playing")
                         .unwrap_or(false)
                 };
@@ -671,7 +714,8 @@ impl UPnPAdapter {
                         AV_TRANSPORT_URN,
                         "Pause",
                         "<InstanceID>0</InstanceID>",
-                    ).await?;
+                    )
+                    .await?;
                 } else {
                     Self::soap_call(
                         &self.http,
@@ -679,18 +723,22 @@ impl UPnPAdapter {
                         AV_TRANSPORT_URN,
                         "Play",
                         "<InstanceID>0</InstanceID><Speed>1</Speed>",
-                    ).await?;
+                    )
+                    .await?;
                 }
             }
             "stop" => {
-                let url = av_url.as_ref().ok_or_else(|| anyhow::anyhow!("No AVTransport URL"))?;
+                let url = av_url
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("No AVTransport URL"))?;
                 Self::soap_call(
                     &self.http,
                     url,
                     AV_TRANSPORT_URN,
                     "Stop",
                     "<InstanceID>0</InstanceID>",
-                ).await?;
+                )
+                .await?;
             }
             "next" => {
                 anyhow::bail!("Next track not supported by pure UPnP renderers");
@@ -699,7 +747,9 @@ impl UPnPAdapter {
                 anyhow::bail!("Previous track not supported by pure UPnP renderers");
             }
             "vol_abs" | "volume" => {
-                let url = rc_url.as_ref().ok_or_else(|| anyhow::anyhow!("No RenderingControl URL"))?;
+                let url = rc_url
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("No RenderingControl URL"))?;
                 let vol = value.unwrap_or(50).max(0).min(100);
                 Self::soap_call(
                     &self.http,
@@ -715,11 +765,17 @@ impl UPnPAdapter {
                 }
             }
             "vol_rel" => {
-                let url = rc_url.as_ref().ok_or_else(|| anyhow::anyhow!("No RenderingControl URL"))?;
+                let url = rc_url
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("No RenderingControl URL"))?;
                 let delta = value.unwrap_or(0);
                 let current = {
                     let state = self.state.read().await;
-                    state.renderers.get(uuid).and_then(|r| r.volume).unwrap_or(50)
+                    state
+                        .renderers
+                        .get(uuid)
+                        .and_then(|r| r.volume)
+                        .unwrap_or(50)
                 };
                 let new_vol = (current + delta).max(0).min(100);
 
@@ -737,7 +793,9 @@ impl UPnPAdapter {
                 }
             }
             "mute" => {
-                let url = rc_url.as_ref().ok_or_else(|| anyhow::anyhow!("No RenderingControl URL"))?;
+                let url = rc_url
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("No RenderingControl URL"))?;
                 let mute = value.map(|v| v != 0).unwrap_or(true);
                 Self::soap_call(
                     &self.http,
@@ -765,7 +823,15 @@ impl UPnPAdapter {
 
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(200)).await;
-            let _ = Self::poll_renderer(&state, &bus, &http, &uuid, av_url.as_deref(), rc_url.as_deref()).await;
+            let _ = Self::poll_renderer(
+                &state,
+                &bus,
+                &http,
+                &uuid,
+                av_url.as_deref(),
+                rc_url.as_deref(),
+            )
+            .await;
         });
 
         Ok(())

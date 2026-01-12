@@ -280,8 +280,9 @@ pub async fn hqp_setting_handler(
 ) -> impl IntoResponse {
     let result = match req.name.as_str() {
         "mode" => state.hqplayer.set_mode(req.value).await,
-        "filter" | "filter1x" => state.hqplayer.set_filter(req.value, None).await,
-        "filterNx" => state.hqplayer.set_filter(req.value, None).await,
+        "filter" => state.hqplayer.set_filter(req.value, None).await,
+        "filter1x" => state.hqplayer.set_filter(req.value, Some(req.value)).await, // Sets both, value1x specifically
+        "filterNx" => state.hqplayer.set_filter(req.value, None).await, // Sets only Nx filter
         "shaper" => state.hqplayer.set_shaper(req.value).await,
         "samplerate" | "rate" => state.hqplayer.set_rate(req.value).await,
         _ => Err(anyhow::anyhow!("Unknown setting: {}", req.name)),
@@ -510,7 +511,11 @@ pub async fn openhome_control_handler(
     State(state): State<AppState>,
     Json(req): Json<OpenHomeControlRequest>,
 ) -> impl IntoResponse {
-    match state.openhome.control(&req.zone_id, &req.action, req.value).await {
+    match state
+        .openhome
+        .control(&req.zone_id, &req.action, req.value)
+        .await
+    {
         Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
         Err(e) => (
             StatusCode::BAD_REQUEST,
@@ -571,7 +576,11 @@ pub async fn upnp_control_handler(
     State(state): State<AppState>,
     Json(req): Json<UPnPControlRequest>,
 ) -> impl IntoResponse {
-    match state.upnp.control(&req.zone_id, &req.action, req.value).await {
+    match state
+        .upnp
+        .control(&req.zone_id, &req.action, req.value)
+        .await
+    {
         Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
         Err(e) => (
             StatusCode::BAD_REQUEST,

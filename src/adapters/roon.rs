@@ -4,8 +4,9 @@
 
 use anyhow::Result;
 use roon_api::{
-    info, CoreEvent, Info, Parsed, RoonApi, Services, Svc,
-    transport::{self, Control, Transport, Zone as RoonZone, volume},
+    info,
+    transport::{self, volume, Control, Transport, Zone as RoonZone},
+    CoreEvent, Info, Parsed, RoonApi, Services, Svc,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -179,7 +180,9 @@ impl RoonAdapter {
     /// Control playback
     pub async fn control(&self, zone_id: &str, action: &str) -> Result<()> {
         let state = self.state.read().await;
-        let transport = state.transport.as_ref()
+        let transport = state
+            .transport
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Not connected to Roon"))?;
 
         let control = match action {
@@ -204,13 +207,17 @@ impl RoonAdapter {
     /// equipment damage. See tests/volume_safety.rs for regression protection.
     pub async fn change_volume(&self, output_id: &str, value: i32, relative: bool) -> Result<()> {
         let state = self.state.read().await;
-        let transport = state.transport.as_ref()
+        let transport = state
+            .transport
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Not connected to Roon"))?;
 
         if relative {
             // Relative volume changes - clamp step size to prevent wild jumps
             let clamped_step = clamp(value, -MAX_RELATIVE_STEP, MAX_RELATIVE_STEP);
-            transport.change_volume(output_id, &volume::ChangeMode::Relative, clamped_step).await;
+            transport
+                .change_volume(output_id, &volume::ChangeMode::Relative, clamped_step)
+                .await;
         } else {
             // Absolute volume - MUST use output's actual range
             let output = self.find_output(&state, output_id);
@@ -219,10 +226,16 @@ impl RoonAdapter {
 
             tracing::debug!(
                 "Volume change: output={}, requested={}, clamped={}, range={}..{}",
-                output_id, value, clamped_value, min, max
+                output_id,
+                value,
+                clamped_value,
+                min,
+                max
             );
 
-            transport.change_volume(output_id, &volume::ChangeMode::Absolute, clamped_value).await;
+            transport
+                .change_volume(output_id, &volume::ChangeMode::Absolute, clamped_value)
+                .await;
         }
 
         Ok(())
@@ -243,10 +256,16 @@ impl RoonAdapter {
     /// Mute/unmute
     pub async fn mute(&self, output_id: &str, mute: bool) -> Result<()> {
         let state = self.state.read().await;
-        let transport = state.transport.as_ref()
+        let transport = state
+            .transport
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Not connected to Roon"))?;
 
-        let how = if mute { volume::Mute::Mute } else { volume::Mute::Unmute };
+        let how = if mute {
+            volume::Mute::Mute
+        } else {
+            volume::Mute::Unmute
+        };
         transport.mute(output_id, &how).await;
         Ok(())
     }
@@ -263,16 +282,20 @@ fn convert_zone(roon_zone: &RoonZone) -> Zone {
         length: np.length,
     });
 
-    let outputs = roon_zone.outputs.iter().map(|o| Output {
-        output_id: o.output_id.clone(),
-        display_name: o.display_name.clone(),
-        volume: o.volume.as_ref().map(|v| VolumeInfo {
-            value: v.value,
-            min: v.min,
-            max: v.max,
-            is_muted: v.is_muted,
-        }),
-    }).collect();
+    let outputs = roon_zone
+        .outputs
+        .iter()
+        .map(|o| Output {
+            output_id: o.output_id.clone(),
+            display_name: o.display_name.clone(),
+            volume: o.volume.as_ref().map(|v| VolumeInfo {
+                value: v.value,
+                min: v.min,
+                max: v.max,
+                is_muted: v.is_muted,
+            }),
+        })
+        .collect();
 
     let state_str = match roon_zone.state {
         transport::State::Playing => "playing",
@@ -384,7 +407,11 @@ async fn run_roon_loop(state: Arc<RwLock<RoonState>>, bus: SharedBus) -> Result<
                         Parsed::Zones(zones) => {
                             let mut s = state_for_events.write().await;
                             for zone in zones {
-                                tracing::debug!("Zone update: {} ({})", zone.display_name, zone.zone_id);
+                                tracing::debug!(
+                                    "Zone update: {} ({})",
+                                    zone.display_name,
+                                    zone.zone_id
+                                );
                                 let converted = convert_zone(&zone);
 
                                 // Publish zone updated event

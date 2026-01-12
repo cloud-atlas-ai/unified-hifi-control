@@ -13,4 +13,4 @@ firmware/version.json
 .superego/
 .wm/
 /target/
-Cargo.lock
+# Note: Cargo.lock is committed for reproducible binary builds

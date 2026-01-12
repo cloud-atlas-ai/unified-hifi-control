@@ -6,7 +6,7 @@
 //! - Image resizing (bilinear)
 //! - RGB565 conversion (little-endian for ESP32)
 
-use image::{DynamicImage, GenericImageView, ImageFormat, imageops::FilterType};
+use image::{codecs::jpeg::JpegEncoder, imageops::FilterType, DynamicImage, ImageFormat};
 use std::io::Cursor;
 
 /// RGB565 image data for LCD display
@@ -19,7 +19,11 @@ pub struct Rgb565Image {
 /// Convert JPEG buffer to RGB565 format for ESP32 LCD
 ///
 /// Returns RGB565 data in little-endian byte order (ESP32 native).
-pub fn jpeg_to_rgb565(jpeg_data: &[u8], target_width: u32, target_height: u32) -> Result<Rgb565Image, image::ImageError> {
+pub fn jpeg_to_rgb565(
+    jpeg_data: &[u8],
+    target_width: u32,
+    target_height: u32,
+) -> Result<Rgb565Image, image::ImageError> {
     // Decode JPEG
     let img = image::load_from_memory_with_format(jpeg_data, ImageFormat::Jpeg)?;
 
@@ -42,13 +46,16 @@ pub fn jpeg_to_rgb565(jpeg_data: &[u8], target_width: u32, target_height: u32) -
 
 /// Convert any image to RGB565 format
 pub fn image_to_rgb565(img: &DynamicImage, target_width: u32, target_height: u32) -> Rgb565Image {
-    let img = if img.width() != target_width || img.height() != target_height {
-        img.resize_exact(target_width, target_height, FilterType::Triangle)
+    // Avoid clone when dimensions already match
+    let resized;
+    let img_ref = if img.width() != target_width || img.height() != target_height {
+        resized = img.resize_exact(target_width, target_height, FilterType::Triangle);
+        &resized
     } else {
-        img.clone()
+        img
     };
 
-    let rgb565_data = rgba_to_rgb565(&img);
+    let rgb565_data = rgba_to_rgb565(img_ref);
 
     Rgb565Image {
         data: rgb565_data,
@@ -64,10 +71,10 @@ fn rgba_to_rgb565(img: &DynamicImage) -> Vec<u8> {
     let mut rgb565 = Vec::with_capacity((width * height * 2) as usize);
 
     for pixel in rgba.pixels() {
-        let r = pixel[0] >> 3;  // 5 bits
-        let g = pixel[1] >> 2;  // 6 bits
-        let b = pixel[2] >> 3;  // 5 bits
-        // Alpha (pixel[3]) is ignored
+        let r = pixel[0] >> 3; // 5 bits
+        let g = pixel[1] >> 2; // 6 bits
+        let b = pixel[2] >> 3; // 5 bits
+                               // Alpha (pixel[3]) is ignored
 
         // Pack into RGB565: RRRRRGGGGGGBBBBB
         let pixel_value: u16 = ((r as u16) << 11) | ((g as u16) << 5) | (b as u16);
@@ -80,8 +87,13 @@ fn rgba_to_rgb565(img: &DynamicImage) -> Vec<u8> {
     rgb565
 }
 
-/// Resize JPEG and re-encode
-pub fn resize_jpeg(jpeg_data: &[u8], target_width: u32, target_height: u32, quality: u8) -> Result<Vec<u8>, image::ImageError> {
+/// Resize JPEG and re-encode with specified quality
+pub fn resize_jpeg(
+    jpeg_data: &[u8],
+    target_width: u32,
+    target_height: u32,
+    quality: u8,
+) -> Result<Vec<u8>, image::ImageError> {
     let img = image::load_from_memory_with_format(jpeg_data, ImageFormat::Jpeg)?;
 
     let resized = if img.width() != target_width || img.height() != target_height {
@@ -90,8 +102,10 @@ pub fn resize_jpeg(jpeg_data: &[u8], target_width: u32, target_height: u32, qual
         img
     };
 
+    // Use JPEG encoder with specified quality
     let mut output = Cursor::new(Vec::new());
-    resized.write_to(&mut output, ImageFormat::Jpeg)?;
+    let encoder = JpegEncoder::new_with_quality(&mut output, quality);
+    resized.write_with_encoder(encoder)?;
 
     Ok(output.into_inner())
 }

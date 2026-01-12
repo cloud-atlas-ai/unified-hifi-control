@@ -102,8 +102,17 @@ impl MqttAdapter {
     pub async fn start(&self) -> Result<()> {
         let (host, port, username, password, topic_prefix) = {
             let state = self.state.read().await;
-            let host = state.host.clone().ok_or_else(|| anyhow!("MQTT host not configured"))?;
-            (host, state.port, state.username.clone(), state.password.clone(), state.topic_prefix.clone())
+            let host = state
+                .host
+                .clone()
+                .ok_or_else(|| anyhow!("MQTT host not configured"))?;
+            (
+                host,
+                state.port,
+                state.username.clone(),
+                state.password.clone(),
+                state.topic_prefix.clone(),
+            )
         };
 
         // Create MQTT options
@@ -127,12 +136,9 @@ impl MqttAdapter {
         let control_topic = format!("{}/+/control", topic_prefix);
         client.subscribe(&control_topic, QoS::AtMostOnce).await?;
 
-        tracing::info!("MQTT connected to {}:{}", host, port);
+        tracing::info!("MQTT connecting to {}:{}...", host, port);
 
-        {
-            let mut state = self.state.write().await;
-            state.connected = true;
-        }
+        // Note: connected state will be set true when ConnAck is received
 
         // Spawn event loop handler
         let state = self.state.clone();
@@ -155,7 +161,8 @@ impl MqttAdapter {
 
                                 // Try to parse as JSON
                                 if let Ok(cmd) = serde_json::from_str::<Value>(&payload) {
-                                    let action = cmd.get("action")
+                                    let action = cmd
+                                        .get("action")
                                         .and_then(|v| v.as_str())
                                         .unwrap_or("play_pause")
                                         .to_string();
@@ -170,8 +177,8 @@ impl MqttAdapter {
                             }
                         }
                     }
-                    Ok(Event::Incoming(Incoming::ConnAck(_))) => {
-                        tracing::info!("MQTT connected");
+                    Ok(Event::Incoming(Incoming::ConnAck(ack))) => {
+                        tracing::info!("MQTT connected (code: {:?})", ack.code);
                         let mut state = state.write().await;
                         state.connected = true;
                     }
@@ -219,97 +226,130 @@ impl MqttAdapter {
     /// Publish event to MQTT
     async fn publish_event(client: &AsyncClient, prefix: &str, event: &BusEvent) -> Result<()> {
         let (topic_suffix, payload) = match event {
-            BusEvent::RoonConnected { core_name, version } => {
-                ("roon/status".to_string(), serde_json::json!({
+            BusEvent::RoonConnected { core_name, version } => (
+                "roon/status".to_string(),
+                serde_json::json!({
                     "connected": true,
                     "core_name": core_name,
                     "version": version
-                }))
-            }
-            BusEvent::RoonDisconnected => {
-                ("roon/status".to_string(), serde_json::json!({
+                }),
+            ),
+            BusEvent::RoonDisconnected => (
+                "roon/status".to_string(),
+                serde_json::json!({
                     "connected": false
-                }))
-            }
-            BusEvent::ZoneUpdated { zone_id, display_name, state } => {
-                (format!("zones/{}/state", zone_id), serde_json::json!({
+                }),
+            ),
+            BusEvent::ZoneUpdated {
+                zone_id,
+                display_name,
+                state,
+            } => (
+                format!("zones/{}/state", zone_id),
+                serde_json::json!({
                     "zone_id": zone_id,
                     "display_name": display_name,
                     "state": state
-                }))
-            }
-            BusEvent::ZoneRemoved { zone_id } => {
-                (format!("zones/{}/state", zone_id), serde_json::json!({
+                }),
+            ),
+            BusEvent::ZoneRemoved { zone_id } => (
+                format!("zones/{}/state", zone_id),
+                serde_json::json!({
                     "zone_id": zone_id,
                     "removed": true
-                }))
-            }
-            BusEvent::NowPlayingChanged { zone_id, title, artist, album, image_key } => {
-                (format!("zones/{}/now_playing", zone_id), serde_json::json!({
+                }),
+            ),
+            BusEvent::NowPlayingChanged {
+                zone_id,
+                title,
+                artist,
+                album,
+                image_key,
+            } => (
+                format!("zones/{}/now_playing", zone_id),
+                serde_json::json!({
                     "zone_id": zone_id,
                     "title": title,
                     "artist": artist,
                     "album": album,
                     "image_key": image_key
-                }))
-            }
-            BusEvent::SeekPositionChanged { zone_id, position } => {
-                (format!("zones/{}/position", zone_id), serde_json::json!({
+                }),
+            ),
+            BusEvent::SeekPositionChanged { zone_id, position } => (
+                format!("zones/{}/position", zone_id),
+                serde_json::json!({
                     "zone_id": zone_id,
                     "position": position
-                }))
-            }
-            BusEvent::VolumeChanged { output_id, value, is_muted } => {
-                (format!("outputs/{}/volume", output_id), serde_json::json!({
+                }),
+            ),
+            BusEvent::VolumeChanged {
+                output_id,
+                value,
+                is_muted,
+            } => (
+                format!("outputs/{}/volume", output_id),
+                serde_json::json!({
                     "output_id": output_id,
                     "value": value,
                     "is_muted": is_muted
-                }))
-            }
-            BusEvent::HqpConnected { host } => {
-                ("hqplayer/status".to_string(), serde_json::json!({
+                }),
+            ),
+            BusEvent::HqpConnected { host } => (
+                "hqplayer/status".to_string(),
+                serde_json::json!({
                     "connected": true,
                     "host": host
-                }))
-            }
-            BusEvent::HqpDisconnected { host } => {
-                ("hqplayer/status".to_string(), serde_json::json!({
+                }),
+            ),
+            BusEvent::HqpDisconnected { host } => (
+                "hqplayer/status".to_string(),
+                serde_json::json!({
                     "connected": false,
                     "host": host
-                }))
-            }
-            BusEvent::HqpStateChanged { host, state } => {
-                ("hqplayer/state".to_string(), serde_json::json!({
+                }),
+            ),
+            BusEvent::HqpStateChanged { host, state } => (
+                "hqplayer/state".to_string(),
+                serde_json::json!({
                     "host": host,
                     "state": state
-                }))
-            }
-            BusEvent::HqpPipelineChanged { host, filter, shaper, rate } => {
-                ("hqplayer/pipeline".to_string(), serde_json::json!({
+                }),
+            ),
+            BusEvent::HqpPipelineChanged {
+                host,
+                filter,
+                shaper,
+                rate,
+            } => (
+                "hqplayer/pipeline".to_string(),
+                serde_json::json!({
                     "host": host,
                     "filter": filter,
                     "shaper": shaper,
                     "rate": rate
-                }))
-            }
-            BusEvent::LmsConnected { host } => {
-                ("lms/status".to_string(), serde_json::json!({
+                }),
+            ),
+            BusEvent::LmsConnected { host } => (
+                "lms/status".to_string(),
+                serde_json::json!({
                     "connected": true,
                     "host": host
-                }))
-            }
-            BusEvent::LmsDisconnected { host } => {
-                ("lms/status".to_string(), serde_json::json!({
+                }),
+            ),
+            BusEvent::LmsDisconnected { host } => (
+                "lms/status".to_string(),
+                serde_json::json!({
                     "connected": false,
                     "host": host
-                }))
-            }
-            BusEvent::LmsPlayerStateChanged { player_id, state } => {
-                (format!("lms/players/{}/state", player_id), serde_json::json!({
+                }),
+            ),
+            BusEvent::LmsPlayerStateChanged { player_id, state } => (
+                format!("lms/players/{}/state", player_id),
+                serde_json::json!({
                     "player_id": player_id,
                     "state": state
-                }))
-            }
+                }),
+            ),
             BusEvent::ControlCommand { .. } => {
                 // Don't re-publish control commands
                 return Ok(());
@@ -319,7 +359,9 @@ impl MqttAdapter {
         let topic = format!("{}/{}", prefix, topic_suffix);
         let payload_str = serde_json::to_string(&payload)?;
 
-        client.publish(&topic, QoS::AtMostOnce, false, payload_str.as_bytes()).await?;
+        client
+            .publish(&topic, QoS::AtMostOnce, false, payload_str.as_bytes())
+            .await?;
 
         Ok(())
     }
@@ -342,7 +384,8 @@ impl MqttAdapter {
 
         let client = self.client.read().await;
         if let Some(c) = client.as_ref() {
-            c.publish(&full_topic, QoS::AtMostOnce, false, payload.as_bytes()).await?;
+            c.publish(&full_topic, QoS::AtMostOnce, false, payload.as_bytes())
+                .await?;
         }
 
         Ok(())

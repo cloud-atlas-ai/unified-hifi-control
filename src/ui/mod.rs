@@ -19,7 +19,8 @@ use crate::api::AppState;
 /// HTML document wrapper with Pico CSS
 fn html_doc(title: &str, nav_active: &str, content: &str) -> String {
     let nav = nav_html(nav_active);
-    format!(r#"<!DOCTYPE html>
+    format!(
+        r#"<!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
     <meta charset="utf-8">
@@ -47,7 +48,8 @@ fn html_doc(title: &str, nav_active: &str, content: &str) -> String {
         <small>Unified Hi-Fi Control (Rust) - Admin Interface</small>
     </footer>
 </body>
-</html>"#)
+</html>"#
+    )
 }
 
 /// Navigation HTML
@@ -59,10 +61,13 @@ fn nav_html(active: &str) -> String {
         ("lms", "LMS", "/lms"),
     ];
 
-    let items: String = links.iter()
+    let items: String = links
+        .iter()
         .map(|(id, label, href)| {
             if *id == active {
-                format!(r#"<li><a href="{href}" aria-current="page"><strong>{label}</strong></a></li>"#)
+                format!(
+                    r#"<li><a href="{href}" aria-current="page"><strong>{label}</strong></a></li>"#
+                )
             } else {
                 format!(r#"<li><a href="{href}">{label}</a></li>"#)
             }
@@ -70,10 +75,12 @@ fn nav_html(active: &str) -> String {
         .collect::<Vec<_>>()
         .join("\n");
 
-    format!(r#"<nav>
+    format!(
+        r#"<nav>
         <ul><li><strong>Hi-Fi Control</strong></li></ul>
         <ul>{items}</ul>
-    </nav>"#)
+    </nav>"#
+    )
 }
 
 /// GET / - Dashboard with status overview
@@ -179,10 +186,10 @@ async function loadZones() {
                     </header>
                     <p>${nowPlaying}</p>
                     <footer>
-                        <div class="controls">
-                            <button onclick="control('${zone.zone_id}', 'previous')" ${zone.is_previous_allowed ? '' : 'disabled'}>⏮</button>
-                            <button onclick="control('${zone.zone_id}', 'play_pause')">⏯</button>
-                            <button onclick="control('${zone.zone_id}', 'next')" ${zone.is_next_allowed ? '' : 'disabled'}>⏭</button>
+                        <div class="controls" data-zone-id="${zone.zone_id}">
+                            <button data-action="previous" ${zone.is_previous_allowed ? '' : 'disabled'}>⏮</button>
+                            <button data-action="play_pause">⏯</button>
+                            <button data-action="next" ${zone.is_next_allowed ? '' : 'disabled'}>⏭</button>
                         </div>
                     </footer>
                 </article>
@@ -205,6 +212,15 @@ async function control(zoneId, action) {
         console.error('Control error:', e);
     }
 }
+
+// Event delegation for zone controls (prevents XSS)
+document.querySelector('#zones').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const container = btn.closest('[data-zone-id]');
+    if (!container) return;
+    control(container.dataset.zoneId, btn.dataset.action);
+});
 
 loadZones();
 setInterval(loadZones, 4000);
@@ -307,19 +323,23 @@ async function loadHqpProfiles() {
         }
 
         section.innerHTML = `
-            <table>
+            <table id="profiles-table">
                 <thead><tr><th>Profile</th><th>Status</th><th>Action</th></tr></thead>
                 <tbody>
                     ${profiles.map(p => `
                         <tr>
                             <td>${esc(p.name)}</td>
                             <td>${p.active ? '<span class="status-ok">Active</span>' : ''}</td>
-                            <td><button onclick="loadProfile('${esc(p.name)}')" ${p.active ? 'disabled' : ''}>Load</button></td>
+                            <td><button data-profile="${esc(p.name)}" ${p.active ? 'disabled' : ''}>Load</button></td>
                         </tr>
                     `).join('')}
                 </tbody>
             </table>
         `;
+        // Attach click handlers safely
+        section.querySelectorAll('button[data-profile]').forEach(btn => {
+            btn.addEventListener('click', () => loadProfile(btn.dataset.profile));
+        });
     } catch (e) {
         section.removeAttribute('aria-busy');
         section.innerHTML = `<p class="status-err">Error: ${esc(e.message)}</p>`;
@@ -415,7 +435,7 @@ async function loadLmsPlayers() {
             return;
         }
 
-        section.innerHTML = '<div class="zone-grid">' + players.map(player => `
+        section.innerHTML = '<div class="zone-grid" id="lms-grid">' + players.map(player => `
             <article>
                 <header>
                     <strong>${esc(player.name)}</strong>
@@ -426,15 +446,23 @@ async function loadLmsPlayers() {
                     ${player.artist ? `<br><small>${esc(player.artist)}</small>` : ''}
                 </p>
                 <footer>
-                    <div class="controls">
-                        <button onclick="lmsControl('${player.player_id}', 'previous')">⏮</button>
-                        <button onclick="lmsControl('${player.player_id}', 'play_pause')">⏯</button>
-                        <button onclick="lmsControl('${player.player_id}', 'next')">⏭</button>
+                    <div class="controls" data-player-id="${player.player_id}">
+                        <button data-action="previous">⏮</button>
+                        <button data-action="play_pause">⏯</button>
+                        <button data-action="next">⏭</button>
                     </div>
                     <p>Volume: ${player.volume}%</p>
                 </footer>
             </article>
         `).join('') + '</div>';
+        // Attach click handlers via event delegation
+        document.getElementById('lms-grid').addEventListener('click', e => {
+            const btn = e.target.closest('button[data-action]');
+            if (!btn) return;
+            const container = btn.closest('[data-player-id]');
+            if (!container) return;
+            lmsControl(container.dataset.playerId, btn.dataset.action);
+        });
     } catch (e) {
         section.removeAttribute('aria-busy');
         section.innerHTML = `<p class="status-err">Error: ${esc(e.message)}</p>`;

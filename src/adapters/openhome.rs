@@ -162,11 +162,7 @@ impl OpenHomeAdapter {
         Ok(())
     }
 
-    async fn discovery_loop(
-        state: Arc<RwLock<OpenHomeState>>,
-        bus: SharedBus,
-        http: Client,
-    ) {
+    async fn discovery_loop(state: Arc<RwLock<OpenHomeState>>, bus: SharedBus, http: Client) {
         let mut search_interval = interval(SSDP_SEARCH_INTERVAL);
 
         loop {
@@ -198,7 +194,8 @@ impl OpenHomeAdapter {
     ) -> anyhow::Result<()> {
         let urn: URN = OPENHOME_PRODUCT_URN.parse()?;
         let search_target = SearchTarget::URN(urn);
-        let responses = ssdp_client::search(&search_target, Duration::from_secs(3), 2, None).await?;
+        let responses =
+            ssdp_client::search(&search_target, Duration::from_secs(3), 2, None).await?;
 
         futures::pin_mut!(responses);
 
@@ -253,7 +250,9 @@ impl OpenHomeAdapter {
             let uuid_clone = uuid.clone();
 
             tokio::spawn(async move {
-                if let Err(e) = Self::fetch_device_info(&state_clone, &http_clone, &uuid_clone, &location).await {
+                if let Err(e) =
+                    Self::fetch_device_info(&state_clone, &http_clone, &uuid_clone, &location).await
+                {
                     tracing::warn!("Failed to fetch device info for {}: {}", uuid_clone, e);
                 }
                 bus_clone.publish(BusEvent::ZoneUpdated {
@@ -295,7 +294,9 @@ impl OpenHomeAdapter {
 
         let mut s = state.write().await;
         if let Some(device) = s.devices.get_mut(uuid) {
-            device.name = root.device.friendly_name
+            device.name = root
+                .device
+                .friendly_name
                 .unwrap_or_else(|| format!("OpenHome {}", &uuid[..8.min(uuid.len())]));
             device.manufacturer = root.device.manufacturer;
             device.model = root.device.model_name;
@@ -315,7 +316,8 @@ impl OpenHomeAdapter {
         let mut s = state.write().await;
         let now = std::time::Instant::now();
 
-        let stale: Vec<String> = s.devices
+        let stale: Vec<String> = s
+            .devices
             .iter()
             .filter(|(_, d)| now.duration_since(d.last_seen) > STALE_THRESHOLD)
             .map(|(uuid, _)| uuid.clone())
@@ -330,11 +332,7 @@ impl OpenHomeAdapter {
         }
     }
 
-    async fn poll_loop(
-        state: Arc<RwLock<OpenHomeState>>,
-        bus: SharedBus,
-        http: Client,
-    ) {
+    async fn poll_loop(state: Arc<RwLock<OpenHomeState>>, bus: SharedBus, http: Client) {
         let mut poll_interval = interval(POLL_INTERVAL);
 
         loop {
@@ -382,7 +380,8 @@ impl OpenHomeAdapter {
             "urn:av-openhome-org:service:Transport:1",
             "TransportState",
             "",
-        ).await;
+        )
+        .await;
 
         if let Ok(response) = transport_state {
             if let Some(new_state) = Self::extract_xml_value(&response, "Value") {
@@ -408,7 +407,8 @@ impl OpenHomeAdapter {
             "urn:av-openhome-org:service:Volume:1",
             "Volume",
             "",
-        ).await;
+        )
+        .await;
 
         if let Ok(response) = volume {
             if let Some(vol_str) = Self::extract_xml_value(&response, "Value") {
@@ -428,7 +428,8 @@ impl OpenHomeAdapter {
             "urn:av-openhome-org:service:Info:1",
             "Track",
             "",
-        ).await;
+        )
+        .await;
 
         if let Ok(response) = track {
             let uri = Self::extract_xml_value(&response, "Uri");
@@ -467,7 +468,13 @@ impl OpenHomeAdapter {
 
     fn get_base_url(location: &str) -> anyhow::Result<String> {
         let url = url::Url::parse(location)?;
-        Ok(format!("{}://{}", url.scheme(), url.host_str().unwrap_or("localhost")))
+        let port = url.port().map(|p| format!(":{}", p)).unwrap_or_default();
+        Ok(format!(
+            "{}://{}{}",
+            url.scheme(),
+            url.host_str().unwrap_or("localhost"),
+            port
+        ))
     }
 
     async fn soap_call(
@@ -520,8 +527,7 @@ impl OpenHomeAdapter {
             .or_else(|| Self::extract_xml_value(xml, "dc:creator"))
             .unwrap_or_default();
 
-        let album = Self::extract_xml_value(xml, "upnp:album")
-            .unwrap_or_default();
+        let album = Self::extract_xml_value(xml, "upnp:album").unwrap_or_default();
 
         let album_art_uri = Self::extract_xml_value(xml, "upnp:albumArtURI");
 
@@ -565,28 +571,32 @@ impl OpenHomeAdapter {
     /// Get all discovered zones
     pub async fn get_zones(&self) -> Vec<OpenHomeZone> {
         let state = self.state.read().await;
-        state.devices.values().map(|d| {
-            let device_name = match (&d.manufacturer, &d.model) {
-                (Some(m), Some(model)) => Some(format!("{} {}", m, model)),
-                (Some(m), None) => Some(m.clone()),
-                _ => None,
-            };
+        state
+            .devices
+            .values()
+            .map(|d| {
+                let device_name = match (&d.manufacturer, &d.model) {
+                    (Some(m), Some(model)) => Some(format!("{} {}", m, model)),
+                    (Some(m), None) => Some(m.clone()),
+                    _ => None,
+                };
 
-            OpenHomeZone {
-                zone_id: d.uuid.clone(),
-                zone_name: d.name.clone(),
-                state: d.state.clone(),
-                output_count: 1,
-                output_name: d.name.clone(),
-                device_name,
-                volume_control: Some(VolumeControl {
-                    vol_type: "number".to_string(),
-                    min: 0,
-                    max: 100,
-                    is_muted: false,
-                }),
-            }
-        }).collect()
+                OpenHomeZone {
+                    zone_id: d.uuid.clone(),
+                    zone_name: d.name.clone(),
+                    state: d.state.clone(),
+                    output_count: 1,
+                    output_name: d.name.clone(),
+                    device_name,
+                    volume_control: Some(VolumeControl {
+                        vol_type: "number".to_string(),
+                        min: 0,
+                        max: 100,
+                        is_muted: false,
+                    }),
+                }
+            })
+            .collect()
     }
 
     /// Get specific zone by UUID
@@ -603,7 +613,9 @@ impl OpenHomeAdapter {
 
         Some(OpenHomeNowPlaying {
             zone_id: uuid.to_string(),
-            line1: track.map(|t| t.title.clone()).unwrap_or_else(|| device.name.clone()),
+            line1: track
+                .map(|t| t.title.clone())
+                .unwrap_or_else(|| device.name.clone()),
             line2: track.map(|t| t.artist.clone()).unwrap_or_default(),
             line3: track.map(|t| t.album.clone()).unwrap_or_default(),
             is_playing: device.state == "playing",
@@ -617,10 +629,17 @@ impl OpenHomeAdapter {
     }
 
     /// Send control command to a zone
-    pub async fn control(&self, uuid: &str, action: &str, value: Option<i32>) -> anyhow::Result<()> {
+    pub async fn control(
+        &self,
+        uuid: &str,
+        action: &str,
+        value: Option<i32>,
+    ) -> anyhow::Result<()> {
         let location = {
             let state = self.state.read().await;
-            state.devices.get(uuid)
+            state
+                .devices
+                .get(uuid)
                 .map(|d| d.location.clone())
                 .ok_or_else(|| anyhow::anyhow!("Device not found: {}", uuid))?
         };
@@ -637,7 +656,8 @@ impl OpenHomeAdapter {
                     "urn:av-openhome-org:service:Transport:1",
                     "Play",
                     "",
-                ).await?;
+                )
+                .await?;
             }
             "pause" => {
                 Self::soap_call(
@@ -646,11 +666,14 @@ impl OpenHomeAdapter {
                     "urn:av-openhome-org:service:Transport:1",
                     "Pause",
                     "",
-                ).await?;
+                )
+                .await?;
             }
             "play_pause" => {
                 let state = self.state.read().await;
-                let is_playing = state.devices.get(uuid)
+                let is_playing = state
+                    .devices
+                    .get(uuid)
                     .map(|d| d.state == "playing")
                     .unwrap_or(false);
                 drop(state);
@@ -662,7 +685,8 @@ impl OpenHomeAdapter {
                     "urn:av-openhome-org:service:Transport:1",
                     action,
                     "",
-                ).await?;
+                )
+                .await?;
             }
             "stop" => {
                 Self::soap_call(
@@ -671,7 +695,8 @@ impl OpenHomeAdapter {
                     "urn:av-openhome-org:service:Transport:1",
                     "Stop",
                     "",
-                ).await?;
+                )
+                .await?;
             }
             "next" => {
                 Self::soap_call(
@@ -680,7 +705,8 @@ impl OpenHomeAdapter {
                     "urn:av-openhome-org:service:Transport:1",
                     "SkipNext",
                     "",
-                ).await?;
+                )
+                .await?;
             }
             "previous" | "prev" => {
                 Self::soap_call(
@@ -689,7 +715,8 @@ impl OpenHomeAdapter {
                     "urn:av-openhome-org:service:Transport:1",
                     "SkipPrevious",
                     "",
-                ).await?;
+                )
+                .await?;
             }
             "vol_abs" | "volume" => {
                 let vol = value.unwrap_or(50).max(0).min(100);
@@ -699,7 +726,8 @@ impl OpenHomeAdapter {
                     "urn:av-openhome-org:service:Volume:1",
                     "SetVolume",
                     &format!("<Value>{}</Value>", vol),
-                ).await?;
+                )
+                .await?;
 
                 let mut state = self.state.write().await;
                 if let Some(device) = state.devices.get_mut(uuid) {
@@ -720,7 +748,8 @@ impl OpenHomeAdapter {
                     "urn:av-openhome-org:service:Volume:1",
                     "SetVolume",
                     &format!("<Value>{}</Value>", new_vol),
-                ).await?;
+                )
+                .await?;
 
                 let mut state = self.state.write().await;
                 if let Some(device) = state.devices.get_mut(uuid) {

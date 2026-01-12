@@ -151,8 +151,7 @@ pub fn load_config() -> Result<Config> {
         .set_default("port", 3000)?
         // Load from config file if it exists
         .add_source(
-            ::config::File::with_name(&config_dir.join("config").to_string_lossy())
-                .required(false),
+            ::config::File::with_name(&config_dir.join("config").to_string_lossy()).required(false),
         )
         // Override with environment variables (UHC_PORT, UHC_ROON__EXTENSION_ID, etc.)
         .add_source(

@@ -6,14 +6,14 @@
 //! - Configuration (power saving, display rotation, etc.)
 //! - Status (battery level, current zone, last seen)
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use chrono::{DateTime, Utc};
 
 /// Power mode configuration (timeout-based state transition)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,7 +24,10 @@ pub struct PowerModeConfig {
 
 impl Default for PowerModeConfig {
     fn default() -> Self {
-        Self { enabled: false, timeout_sec: 0 }
+        Self {
+            enabled: false,
+            timeout_sec: 0,
+        }
     }
 }
 
@@ -61,14 +64,38 @@ impl Default for KnobConfig {
         Self {
             rotation_charging: 180,
             rotation_not_charging: 0,
-            art_mode_charging: PowerModeConfig { enabled: true, timeout_sec: 60 },
-            dim_charging: PowerModeConfig { enabled: true, timeout_sec: 120 },
-            sleep_charging: PowerModeConfig { enabled: false, timeout_sec: 0 },
-            deep_sleep_charging: PowerModeConfig { enabled: false, timeout_sec: 0 },
-            art_mode_battery: PowerModeConfig { enabled: true, timeout_sec: 30 },
-            dim_battery: PowerModeConfig { enabled: true, timeout_sec: 30 },
-            sleep_battery: PowerModeConfig { enabled: true, timeout_sec: 60 },
-            deep_sleep_battery: PowerModeConfig { enabled: true, timeout_sec: 1200 },
+            art_mode_charging: PowerModeConfig {
+                enabled: true,
+                timeout_sec: 60,
+            },
+            dim_charging: PowerModeConfig {
+                enabled: true,
+                timeout_sec: 120,
+            },
+            sleep_charging: PowerModeConfig {
+                enabled: false,
+                timeout_sec: 0,
+            },
+            deep_sleep_charging: PowerModeConfig {
+                enabled: false,
+                timeout_sec: 0,
+            },
+            art_mode_battery: PowerModeConfig {
+                enabled: true,
+                timeout_sec: 30,
+            },
+            dim_battery: PowerModeConfig {
+                enabled: true,
+                timeout_sec: 30,
+            },
+            sleep_battery: PowerModeConfig {
+                enabled: true,
+                timeout_sec: 60,
+            },
+            deep_sleep_battery: PowerModeConfig {
+                enabled: true,
+                timeout_sec: 1200,
+            },
             wifi_power_save_enabled: false,
             cpu_freq_scaling_enabled: false,
             sleep_poll_stopped_sec: 60,
@@ -279,20 +306,27 @@ impl KnobStore {
         drop(knobs);
         self.save_to_disk().await;
 
-        tracing::info!("Updated knob config: {} (sha: {})", knob_id, result.config_sha);
+        tracing::info!(
+            "Updated knob config: {} (sha: {})",
+            knob_id,
+            result.config_sha
+        );
         Some(result)
     }
 
     /// List all registered knobs
     pub async fn list(&self) -> Vec<KnobSummary> {
         let knobs = self.knobs.read().await;
-        knobs.iter().map(|(id, knob)| KnobSummary {
-            knob_id: id.clone(),
-            name: knob.name.clone(),
-            last_seen: knob.last_seen,
-            version: knob.version.clone(),
-            status: knob.status.clone(),
-        }).collect()
+        knobs
+            .iter()
+            .map(|(id, knob)| KnobSummary {
+                knob_id: id.clone(),
+                name: knob.name.clone(),
+                last_seen: knob.last_seen,
+                version: knob.version.clone(),
+                status: knob.status.clone(),
+            })
+            .collect()
     }
 
     /// Get config SHA for a knob (for change detection)

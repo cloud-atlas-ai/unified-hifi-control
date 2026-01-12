@@ -12,10 +12,19 @@ use tokio::sync::broadcast;
 #[serde(tag = "type", content = "payload")]
 pub enum BusEvent {
     // Roon events
-    RoonConnected { core_name: String, version: String },
+    RoonConnected {
+        core_name: String,
+        version: String,
+    },
     RoonDisconnected,
-    ZoneUpdated { zone_id: String, display_name: String, state: String },
-    ZoneRemoved { zone_id: String },
+    ZoneUpdated {
+        zone_id: String,
+        display_name: String,
+        state: String,
+    },
+    ZoneRemoved {
+        zone_id: String,
+    },
     NowPlayingChanged {
         zone_id: String,
         title: Option<String>,
@@ -23,13 +32,27 @@ pub enum BusEvent {
         album: Option<String>,
         image_key: Option<String>,
     },
-    SeekPositionChanged { zone_id: String, position: i64 },
-    VolumeChanged { output_id: String, value: f32, is_muted: bool },
+    SeekPositionChanged {
+        zone_id: String,
+        position: i64,
+    },
+    VolumeChanged {
+        output_id: String,
+        value: f32,
+        is_muted: bool,
+    },
 
     // HQPlayer events
-    HqpConnected { host: String },
-    HqpDisconnected { host: String },
-    HqpStateChanged { host: String, state: String },
+    HqpConnected {
+        host: String,
+    },
+    HqpDisconnected {
+        host: String,
+    },
+    HqpStateChanged {
+        host: String,
+        state: String,
+    },
     HqpPipelineChanged {
         host: String,
         filter: Option<String>,
@@ -38,9 +61,16 @@ pub enum BusEvent {
     },
 
     // LMS events
-    LmsConnected { host: String },
-    LmsDisconnected { host: String },
-    LmsPlayerStateChanged { player_id: String, state: String },
+    LmsConnected {
+        host: String,
+    },
+    LmsDisconnected {
+        host: String,
+    },
+    LmsPlayerStateChanged {
+        player_id: String,
+        state: String,
+    },
 
     // Control commands (for MQTT/external integration)
     ControlCommand {
@@ -124,7 +154,13 @@ mod tests {
 
         bus.publish(BusEvent::RoonDisconnected);
 
-        assert!(matches!(rx1.recv().await.unwrap(), BusEvent::RoonDisconnected));
-        assert!(matches!(rx2.recv().await.unwrap(), BusEvent::RoonDisconnected));
+        assert!(matches!(
+            rx1.recv().await.unwrap(),
+            BusEvent::RoonDisconnected
+        ));
+        assert!(matches!(
+            rx2.recv().await.unwrap(),
+            BusEvent::RoonDisconnected
+        ));
     }
 }
