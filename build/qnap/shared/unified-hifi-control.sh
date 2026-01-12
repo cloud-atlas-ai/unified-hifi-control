@@ -34,12 +34,23 @@ case "$1" in
     ;;
 
   stop)
+    # Kill by PID file first
     if [ -e $PIDF ]; then
-        kill -9 $(cat $PIDF) 2>/dev/null
+        PID=$(cat $PIDF)
+        if [ -n "$PID" ] && kill -0 $PID 2>/dev/null; then
+            kill -9 $PID 2>/dev/null
+        fi
         rm -f $PIDF
     fi
 
-    killall -9 unified-hifi-control 2>/dev/null
+    # Fallback: kill any process listening on our port
+    PORT_PID=$(netstat -tlnp 2>/dev/null | grep ':8088 ' | awk '{print $7}' | cut -d'/' -f1)
+    if [ -n "$PORT_PID" ]; then
+        kill -9 $PORT_PID 2>/dev/null
+    fi
+
+    # Fallback: kill by binary path
+    pkill -9 -f "${QPKG_ROOT}/unified-hifi-control" 2>/dev/null
 
     echo "$QPKG_NAME stopped."
     ;;
