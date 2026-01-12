@@ -163,11 +163,12 @@ async function buildSynologyPackage(binary) {
 async function buildQnapPackage(binary) {
   const arch = QNAP_ARCHS[binary.platform];
   const result = { name: `QNAP QPKG (${arch})`, success: false };
+  let tempDir = null;
 
   console.log(`Building QNAP package for ${arch}...`);
 
   try {
-    const tempDir = fs.mkdtempSync(path.join(DIST, 'qnap-'));
+    tempDir = fs.mkdtempSync(path.join(DIST, 'qnap-'));
     const payloadDir = path.join(tempDir, 'payload');
 
     // Create payload directory (contents that will be installed)
@@ -207,9 +208,6 @@ async function buildQnapPackage(binary) {
     fs.writeFileSync(qpkgPath, qpkgData);
     fs.chmodSync(qpkgPath, 0o755);
 
-    // Cleanup
-    fs.rmSync(tempDir, { recursive: true });
-
     const stats = fs.statSync(qpkgPath);
     result.success = true;
     result.size = `${(stats.size / 1024 / 1024).toFixed(1)} MB`;
@@ -220,6 +218,11 @@ async function buildQnapPackage(binary) {
   } catch (err) {
     result.error = err.message;
     console.error(`  ✗ QNAP (${arch}): ${err.message}`);
+  } finally {
+    // Always cleanup temp directory
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true });
+    }
   }
 
   return result;

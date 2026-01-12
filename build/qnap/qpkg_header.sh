@@ -10,8 +10,9 @@ QPKG_INSTALL_PATH="/share/CACHEDEV1_DATA/.qpkg"
 QPKG_DIR="${QPKG_INSTALL_PATH}/${QPKG_NAME}"
 
 # Find script location and calculate payload offset
+# Uses unique marker to avoid false matches
 SCRIPT_PATH="$0"
-SCRIPT_SIZE=$(sed '/^exit 1$/q' "$SCRIPT_PATH" | wc -c)
+SCRIPT_SIZE=$(sed '/^__PAYLOAD_BEGINS__$/q' "$SCRIPT_PATH" | wc -c)
 
 # Check if running as root
 if [ "$(id -u)" != "0" ]; then
@@ -19,25 +20,37 @@ if [ "$(id -u)" != "0" ]; then
     exit 1
 fi
 
+# Create unique temp file and setup cleanup trap
+TMP_PAYLOAD=$(mktemp /tmp/qpkg_payload.XXXXXX.tar.gz)
+cleanup() {
+    rm -f "$TMP_PAYLOAD"
+}
+trap cleanup EXIT INT TERM
+
+# Extract payload (everything after marker line)
+echo "Extracting ${QPKG_DISPLAYNAME}..."
+tail -c +$((SCRIPT_SIZE + 1)) "$SCRIPT_PATH" > "$TMP_PAYLOAD"
+
 # Create installation directory
 mkdir -p "$QPKG_DIR"
 
-# Extract payload (everything after 'exit 1')
-echo "Extracting ${QPKG_DISPLAYNAME}..."
-tail -c +$((SCRIPT_SIZE + 1)) "$SCRIPT_PATH" > /tmp/qpkg_payload.tar.gz
+# Extract the archive with error handling
+if ! tar -xzf "$TMP_PAYLOAD" -C "$QPKG_DIR"; then
+    echo "Error: Failed to extract package"
+    exit 1
+fi
 
-# Extract the archive
-tar -xzf /tmp/qpkg_payload.tar.gz -C "$QPKG_DIR"
-rm -f /tmp/qpkg_payload.tar.gz
-
-# Make binary executable
-chmod +x "${QPKG_DIR}/unified-hifi-control"
-chmod +x "${QPKG_DIR}/unified-hifi-control.sh"
+# Make executables runnable
+chmod +x "${QPKG_DIR}/unified-hifi-control" 2>/dev/null || true
+for script in "${QPKG_DIR}"/*.sh; do
+    [ -f "$script" ] && chmod +x "$script"
+done
 
 # Run install script if present
 if [ -f "${QPKG_DIR}/install.sh" ]; then
-    chmod +x "${QPKG_DIR}/install.sh"
-    "${QPKG_DIR}/install.sh"
+    if ! "${QPKG_DIR}/install.sh"; then
+        echo "Warning: install.sh returned non-zero"
+    fi
 fi
 
 # Register with QNAP
@@ -56,4 +69,4 @@ echo "Starting ${QPKG_DISPLAYNAME}..."
 
 echo "Installation complete!"
 exit 0
-exit 1
+__PAYLOAD_BEGINS__
