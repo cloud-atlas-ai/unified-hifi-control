@@ -137,7 +137,7 @@ async fn main() -> Result<()> {
         // Roon routes
         .route("/roon/status", get(api::roon_status_handler))
         .route("/roon/zones", get(api::roon_zones_handler))
-        .route("/roon/zone/:zone_id", get(api::roon_zone_handler))
+        .route("/roon/zone/{zone_id}", get(api::roon_zone_handler))
         .route("/roon/control", post(api::roon_control_handler))
         .route("/roon/volume", post(api::roon_volume_handler))
         // HQPlayer routes
@@ -165,14 +165,14 @@ async fn main() -> Result<()> {
         .route("/lms/config", get(api::lms_config_handler))
         .route("/lms/configure", post(api::lms_configure_handler))
         .route("/lms/players", get(api::lms_players_handler))
-        .route("/lms/player/:player_id", get(api::lms_player_handler))
+        .route("/lms/player/{player_id}", get(api::lms_player_handler))
         .route("/lms/control", post(api::lms_control_handler))
         .route("/lms/volume", post(api::lms_volume_handler))
         // OpenHome routes
         .route("/openhome/status", get(api::openhome_status_handler))
         .route("/openhome/zones", get(api::openhome_zones_handler))
         .route(
-            "/openhome/zone/:zone_id/now_playing",
+            "/openhome/zone/{zone_id}/now_playing",
             get(api::openhome_now_playing_handler),
         )
         .route("/openhome/control", post(api::openhome_control_handler))
@@ -180,7 +180,7 @@ async fn main() -> Result<()> {
         .route("/upnp/status", get(api::upnp_status_handler))
         .route("/upnp/zones", get(api::upnp_zones_handler))
         .route(
-            "/upnp/zone/:zone_id/now_playing",
+            "/upnp/zone/{zone_id}/now_playing",
             get(api::upnp_now_playing_handler),
         )
         .route("/upnp/control", post(api::upnp_control_handler))
