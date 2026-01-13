@@ -157,8 +157,13 @@ async fn main() -> Result<()> {
             "/hqplayer/matrix/profile",
             post(api::hqp_set_matrix_profile_handler),
         )
+        // HQPlayer config routes
+        .route("/hqplayer/config", get(api::hqp_config_handler))
+        .route("/hqplayer/configure", post(api::hqp_configure_handler))
         // LMS routes
         .route("/lms/status", get(api::lms_status_handler))
+        .route("/lms/config", get(api::lms_config_handler))
+        .route("/lms/configure", post(api::lms_configure_handler))
         .route("/lms/players", get(api::lms_players_handler))
         .route("/lms/player/:player_id", get(api::lms_player_handler))
         .route("/lms/control", post(api::lms_control_handler))
@@ -194,9 +199,10 @@ async fn main() -> Result<()> {
         .route("/zones", get(ui::zones_page))
         .route("/hqplayer", get(ui::hqplayer_page))
         .route("/lms", get(ui::lms_page))
+        .route("/settings", get(ui::settings_page))
         // Legacy redirects
         .route("/control", get(ui::control_redirect))
-        .route("/settings", get(ui::settings_redirect))
+        .route("/admin", get(ui::settings_redirect))
         // Middleware
         .layer(CorsLayer::permissive())
         .layer(CompressionLayer::new())

@@ -638,3 +638,116 @@ pub async fn upnp_control_handler(
             .into_response(),
     }
 }
+
+// =============================================================================
+// Configuration handlers
+// =============================================================================
+
+/// LMS configuration request
+#[derive(Deserialize)]
+pub struct LmsConfigRequest {
+    pub host: String,
+    #[serde(default)]
+    pub port: Option<u16>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+}
+
+/// POST /lms/configure - Configure LMS connection
+pub async fn lms_configure_handler(
+    State(state): State<AppState>,
+    Json(req): Json<LmsConfigRequest>,
+) -> impl IntoResponse {
+    // Stop existing connection if any
+    state.lms.stop().await;
+
+    // Configure new connection
+    state
+        .lms
+        .configure(req.host.clone(), req.port, req.username, req.password)
+        .await;
+
+    // Start the adapter
+    match state.lms.start().await {
+        Ok(()) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "ok": true,
+                "host": req.host,
+                "port": req.port.unwrap_or(9000)
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
+    }
+}
+
+/// HQPlayer configuration request
+#[derive(Deserialize)]
+pub struct HqpConfigRequest {
+    pub host: String,
+    #[serde(default)]
+    pub port: Option<u16>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+}
+
+/// POST /hqplayer/configure - Configure HQPlayer connection
+pub async fn hqp_configure_handler(
+    State(state): State<AppState>,
+    Json(req): Json<HqpConfigRequest>,
+) -> impl IntoResponse {
+    // Configure the adapter
+    state
+        .hqplayer
+        .configure(
+            req.host.clone(),
+            req.port,
+            None, // web_port - derive from host
+            req.username,
+            req.password,
+        )
+        .await;
+
+    // Test connection by getting status
+    let status = state.hqplayer.get_status().await;
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "ok": true,
+            "host": req.host,
+            "port": req.port.unwrap_or(4321),
+            "connected": status.connected
+        })),
+    )
+        .into_response()
+}
+
+/// GET /lms/config - Get current LMS configuration
+pub async fn lms_config_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let status = state.lms.get_status().await;
+    Json(serde_json::json!({
+        "configured": status.host.is_some(),
+        "connected": status.connected,
+        "host": status.host,
+        "port": status.port
+    }))
+}
+
+/// GET /hqplayer/config - Get current HQPlayer configuration
+pub async fn hqp_config_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let status = state.hqplayer.get_status().await;
+    Json(serde_json::json!({
+        "configured": status.host.is_some(),
+        "connected": status.connected,
+        "host": status.host,
+        "port": status.port
+    }))
+}
