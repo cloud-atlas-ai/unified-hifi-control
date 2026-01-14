@@ -263,18 +263,32 @@ jobs:
       - name: Build NAS packages
         run: node scripts/build-nas-packages.js
 
-      - name: Upload Synology packages
+      - name: Upload Synology x86_64 package
         uses: actions/upload-artifact@v4
         with:
-          name: synology-packages
-          path: dist/installers/*.spk
+          name: synology-x86_64-spk
+          path: dist/installers/*-x86_64.spk
           retention-days: 5
 
-      - name: Upload QNAP packages
+      - name: Upload Synology aarch64 package
         uses: actions/upload-artifact@v4
         with:
-          name: qnap-packages
-          path: dist/installers/*.qpkg
+          name: synology-aarch64-spk
+          path: dist/installers/*-aarch64.spk
+          retention-days: 5
+
+      - name: Upload QNAP x86_64 package
+        uses: actions/upload-artifact@v4
+        with:
+          name: qnap-x86_64-qpkg
+          path: dist/installers/*_x86_64.qpkg
+          retention-days: 5
+
+      - name: Upload QNAP arm64 package
+        uses: actions/upload-artifact@v4
+        with:
+          name: qnap-arm64-qpkg
+          path: dist/installers/*_arm_64.qpkg
           retention-days: 5
 
   summary:
