@@ -1,5 +1,14 @@
 # Agent Guidelines
 
+## Branch Strategy
+
+**Default branch for Rust development: `v3`**
+
+- `master` = Node.js v2.x (legacy, stable)
+- `v3` = Rust v3.x (active development)
+
+When creating PRs or branches for Rust work, base them on `v3`, not `master`.
+
 ## Test-Driven Development (TDD)
 
 When fixing bugs or implementing features that affect client behavior:
