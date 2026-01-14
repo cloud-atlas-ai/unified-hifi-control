@@ -22,7 +22,7 @@ pub struct Config {
 }
 
 fn default_port() -> u16 {
-    3000
+    8088
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -156,7 +156,7 @@ pub fn load_config() -> Result<Config> {
 
     let config = ::config::Config::builder()
         // Start with defaults
-        .set_default("port", 3000)?
+        .set_default("port", 8088)?
         // Load from config file if it exists
         .add_source(
             ::config::File::with_name(&config_dir.join("config").to_string_lossy()).required(false),
