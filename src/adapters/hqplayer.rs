@@ -128,13 +128,13 @@ pub fn save_hqp_configs(configs: &[HqpInstanceConfig]) -> bool {
 
 const DEFAULT_PORT: u16 = 4321;
 const DEFAULT_WEB_PORT: u16 = 8088;
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
-const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
+const RESPONSE_TIMEOUT: Duration = Duration::from_secs(3);
 const PROFILE_PATH: &str = "/config/profile/load";
 /// Maximum reconnection attempts before giving up
-const MAX_RECONNECT_ATTEMPTS: u32 = 3;
+const MAX_RECONNECT_ATTEMPTS: u32 = 1;
 /// Delay between reconnection attempts
-const RECONNECT_DELAY: Duration = Duration::from_millis(500);
+const RECONNECT_DELAY: Duration = Duration::from_millis(200);
 
 /// HQPlayer state information
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -381,7 +381,7 @@ impl HqpAdapter {
             state: Arc::new(RwLock::new(HqpAdapterState::default())),
             connection: Arc::new(Mutex::new(None)),
             http_client: Client::builder()
-                .timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(3))
                 .build()
                 .expect("Failed to create HTTP client"),
             bus,

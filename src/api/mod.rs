@@ -254,6 +254,18 @@ pub async fn hqp_status_handler(
 
 /// GET /hqplayer/pipeline - HQPlayer pipeline status
 pub async fn hqp_pipeline_handler(State(state): State<AppState>) -> impl IntoResponse {
+    // Quick check - if not connected, return error immediately (don't block on timeout)
+    let status = state.hqplayer.get_status().await;
+    if !status.connected {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "HQPlayer not connected".to_string(),
+            }),
+        )
+            .into_response();
+    }
+
     match state.hqplayer.get_pipeline_status().await {
         Ok(pipeline) => (StatusCode::OK, Json(pipeline)).into_response(),
         Err(e) => (
@@ -385,6 +397,19 @@ pub async fn hqp_load_profile_handler(
 
 /// GET /hqplayer/matrix/profiles - Get matrix profiles and current selection
 pub async fn hqp_matrix_profiles_handler(State(state): State<AppState>) -> impl IntoResponse {
+    // Quick check - if not connected, return empty immediately (don't block on timeout)
+    let status = state.hqplayer.get_status().await;
+    if !status.connected {
+        return (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "profiles": [],
+                "current": null
+            })),
+        )
+            .into_response();
+    }
+
     let profiles = state.hqplayer.get_matrix_profiles().await;
     let current = state.hqplayer.get_matrix_profile().await;
 

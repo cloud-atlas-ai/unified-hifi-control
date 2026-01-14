@@ -43,8 +43,20 @@ fn html_doc(title: &str, nav_active: &str, content: &str) -> String {
         .controls {{ display: flex; gap: 0.5rem; margin-top: 0.5rem; }}
         .controls button {{ margin: 0; padding: 0.5rem 1rem; }}
         small {{ color: var(--pico-muted-color); }}
-        /* Black theme (OLED) */
-        [data-theme="black"] {{ --pico-background-color: #000; --pico-card-background-color: #0a0a0a; }}
+        /* Black theme (OLED) - extends dark theme */
+        [data-theme="black"] {{
+            --pico-background-color: #000;
+            --pico-card-background-color: #0a0a0a;
+            --pico-card-sectioning-background-color: #0a0a0a;
+            --pico-modal-overlay-background-color: rgba(0,0,0,.9);
+            --pico-primary-background: #1a1a1a;
+            --pico-secondary-background: #111;
+            --pico-contrast-background: #0a0a0a;
+            --pico-muted-border-color: #1a1a1a;
+            --pico-form-element-background-color: #0a0a0a;
+            --pico-table-border-color: #1a1a1a;
+            color-scheme: dark;
+        }}
         /* Theme switcher */
         .theme-switcher {{ display: flex; gap: 0.25rem; }}
         .theme-switcher button {{ padding: 0.25rem 0.5rem; font-size: 0.8rem; margin: 0; }}
@@ -95,6 +107,13 @@ fn html_doc(title: &str, nav_active: &str, content: &str) -> String {
             hide('/lms', s.showLms);
             hide('/knobs', s.showKnobs);
         }}
+        // Auto-hide LMS if not configured (check once on page load)
+        fetch('/lms/status').then(r => r.json()).then(st => {{
+            if (!st.host) {{
+                const el = document.querySelector('nav a[href*="/lms"]');
+                if (el) el.style.display = 'none';
+            }}
+        }}).catch(() => {{}});
         updateThemeButtons();
         applyNavVisibility();
     </script>
@@ -268,9 +287,9 @@ async function loadZones() {
                     <div style="min-height:80px;overflow:hidden;">${nowPlaying}</div>
                     <footer>
                         <div class="controls" data-zone-id="${esc(zone.zone_id)}">
-                            <button data-action="previous" ${zone.is_previous_allowed ? '' : 'disabled'}>⏮</button>
+                            <button data-action="previous" ${zone.is_previous_allowed ? '' : 'disabled'}>◀◀</button>
                             <button data-action="play_pause">${playIcon}</button>
-                            <button data-action="next" ${zone.is_next_allowed ? '' : 'disabled'}>⏭</button>
+                            <button data-action="next" ${zone.is_next_allowed ? '' : 'disabled'}>▶▶</button>
                         </div>
                     </footer>
                 </article>
@@ -838,9 +857,9 @@ async function loadLmsPlayers() {
                 </p>
                 <footer>
                     <div class="controls" data-player-id="${esc(player.player_id)}">
-                        <button data-action="previous">⏮</button>
+                        <button data-action="previous">◀◀</button>
                         <button data-action="play_pause">${playIcon}</button>
-                        <button data-action="next">⏭</button>
+                        <button data-action="next">▶▶</button>
                     </div>
                     <p>Volume: ${player.volume}%</p>
                 </footer>
@@ -906,9 +925,9 @@ pub async fn zone_page(State(_state): State<AppState>) -> impl IntoResponse {
             <p id="zone-album" style="margin:0;color:var(--pico-muted-color);"><small>—</small></p>
             <hr>
             <div style="display:flex;gap:0.5rem;align-items:center;margin:1rem 0;">
-                <button id="btn-prev" style="width:3rem;">⏮</button>
+                <button id="btn-prev" style="width:3rem;">◀◀</button>
                 <button id="btn-play" style="width:3rem;">⏯</button>
-                <button id="btn-next" style="width:3rem;">⏭</button>
+                <button id="btn-next" style="width:3rem;">▶▶</button>
                 <span style="margin-left:1rem;">Volume: <strong id="zone-volume">—</strong></span>
                 <button id="btn-vol-down" style="width:2.5rem;" title="Volume Down">−</button>
                 <button id="btn-vol-up" style="width:2.5rem;" title="Volume Up">+</button>
@@ -1358,8 +1377,8 @@ async function openConfig(knobId) {
         const dslpChg = c.deep_sleep_charging || { enabled: false, timeout_sec: 0 };
         const dslpBat = c.deep_sleep_battery || { enabled: true, timeout_sec: 1200 };
 
-        // Helper for timer cell: checkbox then seconds input
-        const timerCell = (name, cfg) => '<td style="white-space:nowrap;"><label style="display:inline-flex;align-items:center;gap:0.25rem;margin:0;"><input type="checkbox" name="' + name + '_on"' + (cfg.enabled ? ' checked' : '') + ' style="margin:0;"><input type="number" name="' + name + '_sec" value="' + cfg.timeout_sec + '" style="width:4rem;margin:0;padding:0.25rem;" min="1"' + (cfg.enabled ? '' : ' disabled') + '>s</label></td>';
+        // Helper for timer cell: checkbox then seconds input, side by side
+        const timerCell = (name, cfg) => '<td style="white-space:nowrap;padding:0.25rem;"><div style="display:flex;align-items:center;gap:0.25rem;"><input type="checkbox" name="' + name + '_on"' + (cfg.enabled ? ' checked' : '') + ' style="margin:0;flex-shrink:0;"><input type="number" name="' + name + '_sec" value="' + cfg.timeout_sec + '" style="width:5rem;margin:0;padding:0.25rem;text-align:right;" min="0"' + (cfg.enabled ? '' : ' disabled') + '><span style="flex-shrink:0;">s</span></div></td>';
 
         container.innerHTML = '<form id="knob-config-form">' +
             '<label>Name<input type="text" name="name" value="' + escAttr(c.name || '') + '" placeholder="Living Room Knob"></label>' +
