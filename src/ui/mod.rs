@@ -177,74 +177,13 @@ fn nav_html(active: &str) -> String {
 }
 
 /// GET / - Dashboard with status overview
+/// Migrated to Dioxus SSR.
 pub async fn dashboard_page(State(_state): State<AppState>) -> impl IntoResponse {
-    let content = r#"
-<h1>Dashboard</h1>
-
-<section id="status">
-    <hgroup>
-        <h2>Service Status</h2>
-        <p>Connection status for all adapters</p>
-    </hgroup>
-    <article aria-busy="true">Loading status...</article>
-</section>
-
-<script>
-function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
-
-async function loadStatus() {
-    const section = document.querySelector('#status article');
-    try {
-        const [status, roon, hqp, lms] = await Promise.all([
-            fetch('/status').then(r => r.json()),
-            fetch('/roon/status').then(r => r.json()).catch(() => ({ connected: false })),
-            fetch('/hqplayer/status').then(r => r.json()).catch(() => ({ connected: false })),
-            fetch('/lms/status').then(r => r.json()).catch(() => ({ connected: false }))
-        ]);
-
-        section.removeAttribute('aria-busy');
-        section.innerHTML = `
-            <p><strong>Version:</strong> ${esc(status.version)}</p>
-            <p><strong>Uptime:</strong> ${status.uptime_secs}s</p>
-            <p><strong>Event Bus Subscribers:</strong> ${status.bus_subscribers}</p>
-            <hr>
-            <table>
-                <thead><tr><th>Adapter</th><th>Status</th><th>Details</th></tr></thead>
-                <tbody>
-                    <tr>
-                        <td>Roon</td>
-                        <td class="${roon.connected ? 'status-ok' : 'status-err'}">${roon.connected ? '✓ Connected' : '✗ Disconnected'}</td>
-                        <td><small>${esc(roon.core_name || '')} ${roon.core_version ? 'v' + esc(roon.core_version) : ''}</small></td>
-                    </tr>
-                    <tr>
-                        <td>HQPlayer</td>
-                        <td class="${hqp.connected ? 'status-ok' : 'status-err'}">${hqp.connected ? '✓ Connected' : '✗ Disconnected'}</td>
-                        <td><small>${esc(hqp.host || '')}</small></td>
-                    </tr>
-                    <tr>
-                        <td>LMS</td>
-                        <td class="${lms.connected ? 'status-ok' : 'status-err'}">${lms.connected ? '✓ Connected' : '✗ Disconnected'}</td>
-                        <td><small>${lms.host ? esc(lms.host) + ':' + lms.port : ''}</small></td>
-                    </tr>
-                    <tr>
-                        <td>MQTT</td>
-                        <td class="${status.mqtt_connected ? 'status-ok' : 'status-err'}">${status.mqtt_connected ? '✓ Connected' : '✗ Disconnected'}</td>
-                        <td></td>
-                    </tr>
-                </tbody>
-            </table>
-        `;
-    } catch (e) {
-        section.removeAttribute('aria-busy');
-        section.innerHTML = `<p class="status-err">Error loading status: ${esc(e.message)}</p>`;
-    }
-}
-loadStatus();
-setInterval(loadStatus, 10000);
-</script>
-"#;
-
-    Html(html_doc("Dashboard", "dashboard", content))
+    let html = dioxus::ssr::render_element(rsx! { DashboardPage {} });
+    Html(format!(
+        "<!DOCTYPE html>\n<html lang=\"en\" data-theme=\"dark\">\n{}</html>",
+        html
+    ))
 }
 
 /// GET /ui/zones - Zones listing and control (HTML page)
