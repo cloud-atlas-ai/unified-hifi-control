@@ -13,7 +13,6 @@ use crate::ui::components::Layout;
 
 /// Client-side JavaScript for the HQPlayer page.
 const HQPLAYER_SCRIPT: &str = r#"
-function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 
 async function loadHqpConfig() {
     const section = document.querySelector('#hqp-config article');

@@ -13,7 +13,6 @@ use crate::ui::components::Layout;
 
 /// Client-side JavaScript for the Zone page.
 const ZONE_SCRIPT: &str = r#"
-function esc(s) { return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 
 let selectedZone = localStorage.getItem('hifi-zone') || null;
 let zonesData = [];

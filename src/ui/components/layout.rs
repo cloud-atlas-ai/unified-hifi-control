@@ -5,6 +5,12 @@ use dioxus::prelude::*;
 use super::nav::Nav;
 use super::theme::{ThemeSwitcher, THEME_FUNCTIONS, THEME_SCRIPT};
 
+/// Shared JavaScript utilities (XSS-safe escaping, etc.)
+const SHARED_JS: &str = r#"
+function esc(s) { return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+function escAttr(s) { return esc(s); }
+"#;
+
 /// CSS styles for the application (extends Pico CSS).
 const CUSTOM_STYLES: &str = r#"
 :root { --pico-font-size: 15px; }
@@ -62,6 +68,7 @@ pub fn Layout(props: LayoutProps) -> Element {
             }
             style { {CUSTOM_STYLES} }
             script { dangerous_inner_html: THEME_SCRIPT }
+            script { dangerous_inner_html: SHARED_JS }
         }
         body {
             header { class: "container",

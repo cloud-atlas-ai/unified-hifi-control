@@ -11,7 +11,6 @@ use crate::ui::components::Layout;
 
 /// Client-side JavaScript for the Settings page.
 const SETTINGS_SCRIPT: &str = r#"
-function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 
 // Discovery status
 async function loadDiscoveryStatus() {

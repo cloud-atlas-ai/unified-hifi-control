@@ -12,8 +12,6 @@ use crate::ui::components::Layout;
 
 /// Client-side JavaScript for the Knobs page.
 const KNOBS_SCRIPT: &str = r#"
-function esc(s) { return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
-function escAttr(s) { return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 
 let zonesData = [];
 let currentKnobId = null;

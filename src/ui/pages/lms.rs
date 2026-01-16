@@ -11,7 +11,6 @@ use crate::ui::components::Layout;
 
 /// Client-side JavaScript for the LMS page.
 const LMS_SCRIPT: &str = r#"
-function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 
 async function loadLmsPlayers() {
     const section = document.querySelector('#lms-players article');

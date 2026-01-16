@@ -10,7 +10,6 @@ use crate::ui::components::Layout;
 
 /// Client-side JavaScript for the Dashboard page.
 const DASHBOARD_SCRIPT: &str = r#"
-function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 
 async function loadStatus() {
     const section = document.querySelector('#status article');

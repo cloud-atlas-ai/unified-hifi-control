@@ -1,18 +1,32 @@
 //! Web UI handlers - daily-use interface for zone and HQPlayer control
 //!
-//! Multiple clients exist for unified-hifi-control:
-//! - Web UI (this) - full control interface, better than HQPlayer Embedded UI
-//! - S3 Knob (hardware surface via /now_playing, /control APIs)
+//! ## Architecture
+//!
+//! **Dioxus SSR-only** - Pages are rendered server-side with Dioxus, then use
+//! vanilla JavaScript for client-side interactivity (polling, controls).
+//!
+//! This approach was chosen because:
+//! - Simpler than full hydration (no WASM bundle)
+//! - Adequate for control surface UI (not a complex SPA)
+//! - JavaScript is already needed for dynamic updates (SSE/polling)
+//!
+//! Future: Consider full Dioxus hydration + SSE for reactive updates.
+//!
+//! ## Structure
+//!
+//! - `components/` - Shared Dioxus components (Layout, Nav, ThemeSwitcher)
+//! - `pages/` - Page components (Dashboard, Settings, Zones, etc.)
+//!
+//! ## Clients
+//!
+//! Multiple clients consume the unified-hifi-control API:
+//! - Web UI (this) - full control interface
+//! - ESP32 Knob (hardware surface via /now_playing, /control APIs)
 //! - Apple Watch / iOS apps (via REST API + SSE)
 //! - Home Assistant (via MQTT)
 //!
 //! Using Pico CSS (classless CSS framework) for clean, accessible,
 //! mobile-friendly design without custom CSS maintenance burden.
-//!
-//! Migration to Dioxus:
-//! - components/ - Shared Dioxus components (nav, theme, layout)
-//! - pages/ - Page components (settings, dashboard, zones, etc.)
-//! - Legacy pages remain in this file until migrated
 
 pub mod components;
 pub mod pages;
@@ -39,7 +53,7 @@ fn html_doc(title: &str, nav_active: &str, content: &str) -> String {
     let version = env!("CARGO_PKG_VERSION");
     format!(
         r#"<!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -181,7 +195,7 @@ fn nav_html(active: &str) -> String {
 pub async fn dashboard_page(State(_state): State<AppState>) -> impl IntoResponse {
     let html = dioxus::ssr::render_element(rsx! { DashboardPage {} });
     Html(format!(
-        "<!DOCTYPE html>\n<html lang=\"en\" data-theme=\"dark\">\n{}</html>",
+        "<!DOCTYPE html>\n<html lang=\"en\" >\n{}</html>",
         html
     ))
 }
@@ -191,7 +205,7 @@ pub async fn dashboard_page(State(_state): State<AppState>) -> impl IntoResponse
 pub async fn zones_page(State(_state): State<AppState>) -> impl IntoResponse {
     let html = dioxus::ssr::render_element(rsx! { ZonesPage {} });
     Html(format!(
-        "<!DOCTYPE html>\n<html lang=\"en\" data-theme=\"dark\">\n{}</html>",
+        "<!DOCTYPE html>\n<html lang=\"en\" >\n{}</html>",
         html
     ))
 }
@@ -201,7 +215,7 @@ pub async fn zones_page(State(_state): State<AppState>) -> impl IntoResponse {
 pub async fn hqplayer_page(State(_state): State<AppState>) -> impl IntoResponse {
     let html = dioxus::ssr::render_element(rsx! { HqplayerPage {} });
     Html(format!(
-        "<!DOCTYPE html>\n<html lang=\"en\" data-theme=\"dark\">\n{}</html>",
+        "<!DOCTYPE html>\n<html lang=\"en\" >\n{}</html>",
         html
     ))
 }
@@ -211,7 +225,7 @@ pub async fn hqplayer_page(State(_state): State<AppState>) -> impl IntoResponse 
 pub async fn lms_page(State(_state): State<AppState>) -> impl IntoResponse {
     let html = dioxus::ssr::render_element(rsx! { LmsPage {} });
     Html(format!(
-        "<!DOCTYPE html>\n<html lang=\"en\" data-theme=\"dark\">\n{}</html>",
+        "<!DOCTYPE html>\n<html lang=\"en\" >\n{}</html>",
         html
     ))
 }
@@ -221,7 +235,7 @@ pub async fn lms_page(State(_state): State<AppState>) -> impl IntoResponse {
 pub async fn zone_page(State(_state): State<AppState>) -> impl IntoResponse {
     let html = dioxus::ssr::render_element(rsx! { ZonePage {} });
     Html(format!(
-        "<!DOCTYPE html>\n<html lang=\"en\" data-theme=\"dark\">\n{}</html>",
+        "<!DOCTYPE html>\n<html lang=\"en\" >\n{}</html>",
         html
     ))
 }
@@ -231,7 +245,7 @@ pub async fn zone_page(State(_state): State<AppState>) -> impl IntoResponse {
 pub async fn knobs_page(State(_state): State<AppState>) -> impl IntoResponse {
     let html = dioxus::ssr::render_element(rsx! { KnobsPage {} });
     Html(format!(
-        "<!DOCTYPE html>\n<html lang=\"en\" data-theme=\"dark\">\n{}</html>",
+        "<!DOCTYPE html>\n<html lang=\"en\" >\n{}</html>",
         html
     ))
 }
@@ -242,7 +256,7 @@ pub async fn settings_page(State(_state): State<AppState>) -> impl IntoResponse 
     // Render the Dioxus component to HTML string
     let html = dioxus::ssr::render_element(rsx! { SettingsPage {} });
     Html(format!(
-        "<!DOCTYPE html>\n<html lang=\"en\" data-theme=\"dark\">\n{}</html>",
+        "<!DOCTYPE html>\n<html lang=\"en\" >\n{}</html>",
         html
     ))
 }

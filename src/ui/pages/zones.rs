@@ -12,7 +12,6 @@ use crate::ui::components::Layout;
 
 /// Client-side JavaScript for the Zones page.
 const ZONES_SCRIPT: &str = r#"
-function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 
 let hqpZoneLinks = {};
 let matrixProfiles = [];
