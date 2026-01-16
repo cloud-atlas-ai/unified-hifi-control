@@ -1,48 +1,12 @@
 {
   "name": "unified-hifi-control",
   "version": "3.0.0-rc.1",
-  "engines": {
-    "node": ">=18.0.0"
-  },
   "description": "Source-agnostic hi-fi control bridge for hardware surfaces and Home Assistant",
-  "main": "src/index.js",
   "bin": {
-    "unified-hifi-control": "src/index.js",
     "unified-hifi-control-mcp": "mcp/index.js"
   },
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "mcp": "node mcp/index.js",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "lint": "eslint src mcp --ext .js",
-    "lint:fix": "eslint src mcp --ext .js --fix",
-    "version": "node scripts/sync-version.js && git add .claude-plugin/marketplace.json plugin/.claude-plugin/plugin.json",
-    "build": "npm run build:binaries",
-    "build:binaries": "node scripts/build-binaries.js",
-    "build:lms-plugin": "node scripts/build-lms-plugin.js",
-    "build:installers": "node scripts/build-installers.js",
-    "build:nas": "node scripts/build-nas-packages.js",
-    "build:arch": "node scripts/build-arch-package.js"
-  },
-  "pkg": {
-    "scripts": [
-      "src/**/*.js",
-      "mcp/**/*.js"
-    ],
-    "assets": [
-      "src/ui/**/*",
-      "package.json"
-    ],
-    "targets": [
-      "node18-linux-x64",
-      "node18-linux-arm64",
-      "node18-macos-x64",
-      "node18-macos-arm64",
-      "node18-win-x64"
-    ],
-    "outputPath": "dist/bin"
+    "mcp": "node mcp/index.js"
   },
   "repository": {
     "type": "git",
@@ -52,33 +16,6 @@
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@xmldom/xmldom": "^0.9.8",
-    "bonjour": "^3.5.0",
-    "compression": "^1.8.1",
-    "cors": "^2.8.5",
-    "express": "^5.2.1",
-    "jpeg-js": "^0.4.4",
-    "morgan": "^1.10.1",
-    "mqtt": "^5.14.1",
-    "node-fetch": "^2.7.0",
-    "node-roon-api": "github:roonlabs/node-roon-api",
-    "node-roon-api-image": "github:roonlabs/node-roon-api-image",
-    "node-roon-api-status": "github:roonlabs/node-roon-api-status",
-    "node-roon-api-transport": "github:roonlabs/node-roon-api-transport",
-    "node-soap": "^1.0.0",
-    "node-ssdp": "^4.0.1",
-    "sharp": "^0.34.5",
-    "upnp-mediarenderer-client": "^1.4.0",
-    "xml2js": "^0.6.2",
-    "xpath": "^0.0.34"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.39.2",
-    "@yao-pkg/pkg": "^5.12.0",
-    "archiver": "^7.0.1",
-    "eslint": "^9.39.2",
-    "globals": "^17.0.0",
-    "jest": "^29.7.0",
-    "nodemon": "^3.1.0"
+    "node-fetch": "^2.7.0"
   }
 }

@@ -1,0 +1,17 @@
+# Cross-compilation configuration for cross-rs
+# https://github.com/cross-rs/cross
+
+[build.env]
+passthrough = [
+    "RUST_BACKTRACE",
+    "RUST_LOG",
+]
+
+# x86_64 Linux (static musl)
+[target.x86_64-unknown-linux-musl]
+
+# aarch64 Linux (static musl) - Raspberry Pi 4, Apple Silicon VMs
+[target.aarch64-unknown-linux-musl]
+
+# armv7 Linux (static musl) - Raspberry Pi 2/3, older ARM devices
+[target.armv7-unknown-linux-musleabihf]

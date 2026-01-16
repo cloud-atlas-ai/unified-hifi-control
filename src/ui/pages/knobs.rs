@@ -100,20 +100,23 @@ async function openConfig(knobId) {
         container.innerHTML = '<form id="knob-config-form">' +
             '<label>Name<input type="text" name="name" value="' + escAttr(c.name || '') + '" placeholder="Living Room Knob"></label>' +
             '<fieldset><legend>Display Rotation</legend>' +
+            '<p style="margin-bottom:0.5rem;"><small>Flip the display based on how the knob is oriented. Useful if you mount it differently when docked vs handheld.</small></p>' +
             '<div class="grid"><label>Charging: ' + rotSel('rotation_charging', c.rotation_charging ?? 180) + '</label>' +
             '<label>Battery: ' + rotSel('rotation_not_charging', c.rotation_not_charging ?? 0) + '</label></div></fieldset>' +
-            '<fieldset><legend>Power Timers</legend><p style="margin-bottom:0.5rem;"><small>After inactivity: Art Mode → Dim → Sleep → Deep Sleep</small></p>' +
+            '<fieldset><legend>Power Timers</legend>' +
+            '<p style="margin-bottom:0.5rem;"><small>After inactivity, the display transitions: <strong>Art Mode</strong> (album art) → <strong>Dim</strong> (reduced brightness) → <strong>Sleep</strong> (display off) → <strong>Deep Sleep</strong> (low power, rotate knob to wake). Timeout in seconds; uncheck to skip a state.</small></p>' +
             '<table style="font-size:0.9rem;"><thead><tr><th style="width:6rem;"></th><th>Charging</th><th>Battery</th></tr></thead><tbody>' +
             '<tr><td>Art Mode</td>' + timerCell('art_chg', artChg) + timerCell('art_bat', artBat) + '</tr>' +
             '<tr><td>Dim</td>' + timerCell('dim_chg', dimChg) + timerCell('dim_bat', dimBat) + '</tr>' +
             '<tr><td>Sleep</td>' + timerCell('slp_chg', slpChg) + timerCell('slp_bat', slpBat) + '</tr>' +
             '<tr><td>Deep Sleep</td>' + timerCell('dslp_chg', dslpChg) + timerCell('dslp_bat', dslpBat) + '</tr>' +
             '</tbody></table></fieldset>' +
-            '<fieldset><legend>Sleep Mode</legend>' +
+            '<fieldset><legend>Sleep Mode Settings</legend>' +
+            '<p style="margin-bottom:0.5rem;"><small>Settings for Sleep mode only (display off, still connected). Deep Sleep ignores these—it fully disconnects WiFi and suspends the CPU.</small></p>' +
             '<div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;">' +
-            '<label style="margin:0;"><input type="checkbox" name="wifi_ps"' + (c.wifi_power_save_enabled ? ' checked' : '') + '> WiFi Power Save</label>' +
-            '<label style="margin:0;"><input type="checkbox" name="cpu_scale"' + (c.cpu_freq_scaling_enabled ? ' checked' : '') + '> CPU Scaling</label>' +
-            '<label style="margin:0;">Poll: <input type="number" name="sleep_poll_stopped" value="' + (c.sleep_poll_stopped_sec ?? 60) + '" style="width:4rem;margin:0 0.25rem;padding:0.25rem;" min="1">s</label>' +
+            '<label style="margin:0;" title="Reduces WiFi power while sleeping"><input type="checkbox" name="wifi_ps"' + (c.wifi_power_save_enabled ? ' checked' : '') + '> WiFi Power Save</label>' +
+            '<label style="margin:0;" title="Lowers CPU speed while sleeping"><input type="checkbox" name="cpu_scale"' + (c.cpu_freq_scaling_enabled ? ' checked' : '') + '> CPU Scaling</label>' +
+            '<label style="margin:0;" title="How often to check for playback updates while sleeping">Poll: <input type="number" name="sleep_poll_stopped" value="' + (c.sleep_poll_stopped_sec ?? 60) + '" style="width:4rem;margin:0 0.25rem;padding:0.25rem;" min="1">s</label>' +
             '</div></fieldset>' +
             '<footer><button type="button" class="secondary" onclick="closeModal()">Cancel</button><button type="submit">Save</button></footer></form>';
 
