@@ -4,7 +4,7 @@ version = "3.0.0-rc.1"
 edition = "2021"
 authors = ["Muness Castle"]
 description = "Source-agnostic hi-fi control bridge for hardware surfaces and Home Assistant"
-license = "MIT"
+license = "PolyForm-Noncommercial-1.0.0"
 repository = "https://github.com/open-horizon-labs/unified-hifi-control"
 
 [features]
@@ -100,3 +100,4 @@ panic = "abort"
 # Cross-compilation targets for static musl builds
 # Build with: cargo build --release --target x86_64-unknown-linux-musl
 # Or use cross: cross build --release --target x86_64-unknown-linux-musl
+# Available targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl, armv7-unknown-linux-musleabihf
