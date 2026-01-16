@@ -10,7 +10,7 @@ use File::Slurp qw(write_file);
 use File::Spec::Functions qw(catfile catdir);
 use File::Path qw(make_path);
 use JSON::XS;
-use POSIX qw(:sys_wait_h);
+use Proc::Background;
 
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
@@ -287,7 +287,7 @@ sub bin {
     }
 
     my $binaryPath = catfile($bindir, $selected);
-    chmod 0755, $binaryPath unless main::ISWINDOWS && -e $binaryPath;
+    chmod 0755, $binaryPath if !main::ISWINDOWS && -e $binaryPath;
 
     return $binaryPath;
 }
@@ -391,7 +391,6 @@ sub _healthCheck {
 
     if ($prefs->get('autorun')) {
         if (!running()) {
-            warn Data::Dump::dump($helperProc);
             $log->warn("Helper process died unexpectedly");
 
             if ($restarts < MAX_RESTARTS) {
@@ -404,7 +403,7 @@ sub _healthCheck {
                 # User can manually start via settings, which resets $restarts
             }
         } else {
-            $log->info("Helper running with PID " . $helperProc->pid);
+            $log->debug("Helper running with PID " . $helperProc->pid);
 
             # Process is healthy, schedule restart counter reset
             if ($restarts > 0) {
@@ -469,7 +468,7 @@ sub writeKnobConfig {
     };
 
     eval {
-        write_file($configFile . '.json', encode_json($config));
+        write_file($configFile, encode_json($config));
         $log->debug("Wrote knob config to $configFile");
     };
     if ($@) {
