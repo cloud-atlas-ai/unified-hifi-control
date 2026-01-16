@@ -382,7 +382,7 @@ sub running {
 sub webUrl {
     my $class = shift;
     my $port = $prefs->get('port') || 8088;
-    return "http://localhost:$port";
+    return sprintf('http://%s:%d', Slim::Utils::Network::serverAddr(), $port);
 }
 
 # Health check timer callback
