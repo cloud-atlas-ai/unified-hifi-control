@@ -4,6 +4,8 @@
 
 pub mod dashboard;
 pub mod settings;
+pub mod zone;
 
 pub use dashboard::DashboardPage;
 pub use settings::SettingsPage;
+pub use zone::ZonePage;

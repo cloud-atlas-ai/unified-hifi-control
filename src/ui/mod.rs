@@ -25,7 +25,7 @@ use dioxus::prelude::*;
 use serde::Deserialize;
 
 use crate::api::AppState;
-use pages::{DashboardPage, SettingsPage};
+use pages::{DashboardPage, SettingsPage, ZonePage};
 
 /// Query params for zones page (to detect knob requests)
 #[derive(Deserialize)]
@@ -966,8 +966,18 @@ setInterval(loadLmsPlayers, 4000);
 }
 
 /// GET /zone - Single zone control view
+/// Migrated to Dioxus SSR.
 pub async fn zone_page(State(_state): State<AppState>) -> impl IntoResponse {
-    let content = r#"
+    let html = dioxus::ssr::render_element(rsx! { ZonePage {} });
+    Html(format!(
+        "<!DOCTYPE html>\n<html lang=\"en\" data-theme=\"dark\">\n{}</html>",
+        html
+    ))
+}
+
+/// Old zone page content (for reference during migration)
+#[allow(dead_code)]
+const _OLD_ZONE_PAGE: &str = r#"
 <h1>Zone Control</h1>
 <p><small>Select a zone for focused listening and DSP control.</small></p>
 
@@ -1331,9 +1341,6 @@ loadZones();
 setInterval(loadZones, 3000);
 </script>
 "#;
-
-    Html(html_doc("Zone", "zone", content))
-}
 
 /// GET /knobs - Knob device management
 pub async fn knobs_page(State(_state): State<AppState>) -> impl IntoResponse {
