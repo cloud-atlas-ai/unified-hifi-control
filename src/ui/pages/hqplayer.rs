@@ -92,8 +92,8 @@ async function loadHqpStatus() {
     const section = document.querySelector('#hqp-status article');
     try {
         const [status, pipeline] = await Promise.all([
-            fetch('/hqplayer/status').then(r => r.json()),
-            fetch('/hqplayer/pipeline').then(r => r.json()).catch(() => null)
+            fetch('/hqp/status').then(r => r.json()),
+            fetch('/hqp/pipeline').then(r => r.json()).catch(() => null)
         ]);
         section.removeAttribute('aria-busy');
 
@@ -118,7 +118,7 @@ async function loadHqpStatus() {
 async function loadHqpPipeline() {
     const section = document.querySelector('#hqp-pipeline article');
     try {
-        const data = await fetch('/hqplayer/pipeline').then(r => r.json());
+        const data = await fetch('/hqp/pipeline').then(r => r.json());
         section.removeAttribute('aria-busy');
 
         const st = data.status || {};
@@ -152,7 +152,7 @@ async function loadHqpPipeline() {
 async function loadHqpProfiles() {
     const section = document.querySelector('#hqp-profiles article');
     try {
-        const profiles = await fetch('/hqplayer/profiles').then(r => r.json());
+        const profiles = await fetch('/hqp/profiles').then(r => r.json());
         section.removeAttribute('aria-busy');
 
         if (!profiles || !profiles.length) {
@@ -196,7 +196,7 @@ async function setVolume(value) {
 
 async function loadProfile(name) {
     try {
-        await fetch('/hqplayer/profile', {
+        await fetch('/hqp/profiles/load', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ profile: name })

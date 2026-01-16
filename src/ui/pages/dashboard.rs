@@ -17,7 +17,7 @@ async function loadStatus() {
         const [status, roon, hqp, lms] = await Promise.all([
             fetch('/status').then(r => r.json()),
             fetch('/roon/status').then(r => r.json()).catch(() => ({ connected: false })),
-            fetch('/hqplayer/status').then(r => r.json()).catch(() => ({ connected: false })),
+            fetch('/hqp/status').then(r => r.json()).catch(() => ({ connected: false })),
             fetch('/lms/status').then(r => r.json()).catch(() => ({ connected: false }))
         ]);
 

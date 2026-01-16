@@ -146,7 +146,7 @@ async function loadHqpPipeline() {
 
     try {
         const [pipeline, matrixRes] = await Promise.all([
-            fetch('/hqplayer/pipeline').then(r => r.json()),
+            fetch('/hqp/pipeline').then(r => r.json()),
             fetch('/hqplayer/matrix/profiles').then(r => r.json()).catch(() => ({ profiles: [] }))
         ]);
 
@@ -215,7 +215,7 @@ async function setPipeline(setting, value) {
     selects.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = true; });
 
     try {
-        const res = await fetch('/hqplayer/setting', {
+        const res = await fetch('/hqp/pipeline', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ setting, value })
