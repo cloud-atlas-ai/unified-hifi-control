@@ -25,7 +25,7 @@ use dioxus::prelude::*;
 use serde::Deserialize;
 
 use crate::api::AppState;
-use pages::{DashboardPage, SettingsPage, ZonePage};
+use pages::{DashboardPage, HqplayerPage, KnobsPage, LmsPage, SettingsPage, ZonePage, ZonesPage};
 
 /// Query params for zones page (to detect knob requests)
 #[derive(Deserialize)]
@@ -187,8 +187,18 @@ pub async fn dashboard_page(State(_state): State<AppState>) -> impl IntoResponse
 }
 
 /// GET /ui/zones - Zones listing and control (HTML page)
+/// Migrated to Dioxus SSR.
 pub async fn zones_page(State(_state): State<AppState>) -> impl IntoResponse {
-    let content = r#"
+    let html = dioxus::ssr::render_element(rsx! { ZonesPage {} });
+    Html(format!(
+        "<!DOCTYPE html>\n<html lang=\"en\" data-theme=\"dark\">\n{}</html>",
+        html
+    ))
+}
+
+/// Old zones page content (for reference during migration)
+#[allow(dead_code)]
+const _OLD_ZONES_PAGE: &str = r#"
 <h1>Zones</h1>
 
 <section id="zones">
@@ -361,12 +371,19 @@ setInterval(loadZones, 4000);
 </script>
 "#;
 
-    Html(html_doc("Zones", "zones", content))
+/// GET /hqplayer - HQPlayer status and DSP controls
+/// Migrated to Dioxus SSR.
+pub async fn hqplayer_page(State(_state): State<AppState>) -> impl IntoResponse {
+    let html = dioxus::ssr::render_element(rsx! { HqplayerPage {} });
+    Html(format!(
+        "<!DOCTYPE html>\n<html lang=\"en\" data-theme=\"dark\">\n{}</html>",
+        html
+    ))
 }
 
-/// GET /hqplayer - HQPlayer status and DSP controls
-pub async fn hqplayer_page(State(_state): State<AppState>) -> impl IntoResponse {
-    let content = r#"
+/// Old hqplayer page content (for reference during migration)
+#[allow(dead_code)]
+const _OLD_HQPLAYER_PAGE: &str = r#"
 <h1>HQPlayer</h1>
 
 <section id="hqp-config">
@@ -757,12 +774,19 @@ setInterval(loadHqpPipeline, 5000);
 </script>
 "#;
 
-    Html(html_doc("HQPlayer", "hqplayer", content))
+/// GET /lms - LMS status and players
+/// Migrated to Dioxus SSR.
+pub async fn lms_page(State(_state): State<AppState>) -> impl IntoResponse {
+    let html = dioxus::ssr::render_element(rsx! { LmsPage {} });
+    Html(format!(
+        "<!DOCTYPE html>\n<html lang=\"en\" data-theme=\"dark\">\n{}</html>",
+        html
+    ))
 }
 
-/// GET /lms - LMS status and players
-pub async fn lms_page(State(_state): State<AppState>) -> impl IntoResponse {
-    let content = r#"
+/// Old LMS page content (for reference during migration)
+#[allow(dead_code)]
+const _OLD_LMS_PAGE: &str = r#"
 <h1>Logitech Media Server</h1>
 
 <section id="lms-config">
@@ -961,9 +985,6 @@ setInterval(loadLmsConfig, 10000);
 setInterval(loadLmsPlayers, 4000);
 </script>
 "#;
-
-    Html(html_doc("LMS", "lms", content))
-}
 
 /// GET /zone - Single zone control view
 /// Migrated to Dioxus SSR.
@@ -1343,8 +1364,18 @@ setInterval(loadZones, 3000);
 "#;
 
 /// GET /knobs - Knob device management
+/// Migrated to Dioxus SSR.
 pub async fn knobs_page(State(_state): State<AppState>) -> impl IntoResponse {
-    let content = r#"
+    let html = dioxus::ssr::render_element(rsx! { KnobsPage {} });
+    Html(format!(
+        "<!DOCTYPE html>\n<html lang=\"en\" data-theme=\"dark\">\n{}</html>",
+        html
+    ))
+}
+
+/// Old knobs page content (for reference during migration)
+#[allow(dead_code)]
+const _OLD_KNOBS_PAGE: &str = r#"
 <h1>Knob Devices</h1>
 
 <p><a href="https://community.roonlabs.com/t/50-esp32-s3-knob-roon-controller/311363" target="_blank" rel="noopener">Knob Community Thread</a> - build info, firmware updates, discussion</p>
@@ -1587,9 +1618,6 @@ loadFirmwareVersion();
 setInterval(loadKnobs, 10000);
 </script>
 "#;
-
-    Html(html_doc("Knobs", "knobs", content))
-}
 
 /// GET /settings - Settings page (adapter configuration)
 /// Migrated to Dioxus SSR.
