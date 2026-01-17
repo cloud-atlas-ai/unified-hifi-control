@@ -452,19 +452,16 @@ jobs:
 
       - name: Build QPKG with Docker
         run: |
-          # Use official QNAP containerized-qpkg approach
-          # Build the qpkg-builder image or use pre-built
+          # Use pre-built QDK2 Docker image
           docker run --rm --platform linux/amd64 \
-            -v "$(pwd)/qnap-build:/work" \
-            -w /work \
-            ubuntu:20.04 \
+            -v "$(pwd)/qnap-build:/src" \
+            dorowu/qdk2 \
             bash -c '
-              apt-get update && apt-get install -y wget fakeroot python3 >/dev/null 2>&1
-              wget -q https://github.com/qnap-dev/qdk2/releases/download/v2.4.1/qdk2_2.4.1_amd64.deb
-              dpkg -i qdk2_2.4.1_amd64.deb >/dev/null 2>&1 || apt-get install -f -y >/dev/null 2>&1
-              fakeroot /usr/share/qdk2/QDK/bin/qbuild --build-dir /work/build
-              cp /work/build/*.qpkg /work/ 2>/dev/null || find /work/build -name "*.qpkg" -exec cp {} /work/ \;
-              chmod 666 /work/*.qpkg
+              set -e
+              cd /src
+              fakeroot /usr/share/qdk2/QDK/bin/qbuild --build-dir /src/build
+              cp /src/build/*.qpkg /src/ 2>/dev/null || find /src/build -name "*.qpkg" -exec cp {} /src/ \;
+              chmod 666 /src/*.qpkg
             '
 
       - name: Move QPKG to dist
