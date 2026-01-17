@@ -321,7 +321,7 @@ async fn main() -> Result<()> {
         )
         // Protocol route: /zones returns JSON (for knob, iOS, etc.)
         .route("/zones", get(knobs::knob_zones_handler))
-        // Web UI routes
+        // Web UI routes (SSR - Dioxus fullstack migration in progress)
         .route("/", get(ui::dashboard_page))
         .route("/ui/zones", get(ui::zones_page))
         .route("/zone", get(ui::zone_page))

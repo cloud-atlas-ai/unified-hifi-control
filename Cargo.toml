@@ -19,8 +19,8 @@ tokio = { version = "1", features = ["full"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "compression-gzip", "trace"] }
 
-# Dioxus UI framework (SSR + client hydration)
-dioxus = { version = "0.7", features = ["fullstack"] }
+# Dioxus UI framework (SSR + client hydration + router)
+dioxus = { version = "0.7", features = ["fullstack", "router"] }
 
 # Roon API (the key discovery!)
 # Package is named "roon-api" in Cargo.toml, repo is "rust-roon-api"

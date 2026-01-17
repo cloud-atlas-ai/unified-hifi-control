@@ -1,0 +1,12 @@
+[application]
+name = "unified-hifi-control"
+
+[web.app]
+title = "Unified Hi-Fi Control"
+
+[web.watcher]
+reload_html = true
+watch_path = ["src"]
+
+[web.resource]
+dev_base_path = "/"

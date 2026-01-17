@@ -13,6 +13,7 @@
 pub mod adapters;
 pub mod aggregator;
 pub mod api;
+pub mod app;
 pub mod bus;
 pub mod config;
 pub mod coordinator;

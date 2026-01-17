@@ -736,6 +736,7 @@ dependencies = [
  "dioxus-html",
  "dioxus-liveview",
  "dioxus-logger",
+ "dioxus-router",
  "dioxus-server",
  "dioxus-signals",
  "dioxus-ssr",
