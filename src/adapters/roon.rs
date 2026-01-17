@@ -228,8 +228,18 @@ impl RoonAdapter {
             loop {
                 tracing::info!("Starting Roon discovery loop...");
 
-                match run_roon_loop(state_clone.clone(), bus_clone.clone(), base_url.clone()).await
-                {
+                // Wrap run_roon_loop in select! to allow cancellation during execution
+                let loop_result = tokio::select! {
+                    _ = shutdown_clone.cancelled() => {
+                        tracing::info!("Roon adapter shutdown requested during discovery");
+                        break;
+                    }
+                    result = run_roon_loop(state_clone.clone(), bus_clone.clone(), base_url.clone()) => {
+                        result
+                    }
+                };
+
+                match loop_result {
                     Ok(()) => {
                         tracing::info!("Roon event loop ended normally");
                     }

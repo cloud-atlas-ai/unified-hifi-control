@@ -308,6 +308,7 @@ struct LmsState {
     username: Option<String>,
     password: Option<String>,
     connected: bool,
+    running: bool,
     players: HashMap<String, LmsPlayer>,
 }
 
@@ -319,6 +320,7 @@ impl Default for LmsState {
             username: None,
             password: None,
             connected: false,
+            running: false,
             players: HashMap::new(),
         }
     }
@@ -469,6 +471,15 @@ impl LmsAdapter {
             return Err(anyhow!("LMS not configured"));
         }
 
+        // Check if already running to prevent double-start
+        {
+            let mut state = self.state.write().await;
+            if state.running {
+                return Ok(());
+            }
+            state.running = true;
+        }
+
         // Initial update
         self.update_players().await?;
 
@@ -534,6 +545,7 @@ impl LmsAdapter {
         let host = {
             let mut state = self.state.write().await;
             state.connected = false;
+            state.running = false;
             state.host.clone()
         };
 
