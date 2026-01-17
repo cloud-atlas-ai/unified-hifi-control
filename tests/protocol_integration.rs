@@ -21,6 +21,7 @@ use unified_hifi_control::adapters::lms::LmsAdapter;
 use unified_hifi_control::adapters::openhome::OpenHomeAdapter;
 use unified_hifi_control::adapters::roon::RoonAdapter;
 use unified_hifi_control::adapters::upnp::UPnPAdapter;
+use unified_hifi_control::aggregator::ZoneAggregator;
 use unified_hifi_control::api::AppState;
 use unified_hifi_control::bus::create_bus;
 use unified_hifi_control::knobs::{self, KnobStore};
@@ -40,6 +41,7 @@ async fn create_test_app() -> Router {
     let upnp = Arc::new(UPnPAdapter::new(bus.clone()));
     let knob_store = KnobStore::new(std::env::temp_dir());
 
+    let aggregator = Arc::new(ZoneAggregator::new(bus.clone()));
     let state = AppState::new(
         roon,
         hqplayer,
@@ -50,6 +52,7 @@ async fn create_test_app() -> Router {
         upnp,
         knob_store,
         bus,
+        aggregator,
     );
 
     // Build router with all routes (same as main.rs)

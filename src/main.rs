@@ -2,7 +2,7 @@
 //!
 //! A source-agnostic hi-fi control bridge for hardware surfaces and Home Assistant.
 
-use unified_hifi_control::{adapters, api, bus, config, firmware, knobs, mdns, ui};
+use unified_hifi_control::{adapters, aggregator, api, bus, config, firmware, knobs, mdns, ui};
 
 use anyhow::Result;
 use axum::{
@@ -151,6 +151,14 @@ async fn main() -> Result<()> {
         tracing::info!("UPnP adapter started (SSDP discovery active)");
     }
 
+    // Initialize ZoneAggregator for unified zone state
+    let zone_aggregator = Arc::new(aggregator::ZoneAggregator::new(bus.clone()));
+    let aggregator_for_spawn = zone_aggregator.clone();
+    tokio::spawn(async move {
+        aggregator_for_spawn.run().await;
+    });
+    tracing::info!("ZoneAggregator started");
+
     // Initialize Knob device store
     let data_dir = config::get_data_dir();
     let knob_store = knobs::KnobStore::new(data_dir);
@@ -170,6 +178,7 @@ async fn main() -> Result<()> {
         upnp.clone(),
         knob_store,
         bus.clone(),
+        zone_aggregator,
     );
 
     // Build API routes
@@ -271,6 +280,17 @@ async fn main() -> Result<()> {
             get(api::upnp_now_playing_handler),
         )
         .route("/upnp/control", post(api::upnp_control_handler))
+        // Aggregated zones API (unified across all adapters)
+        .route("/api/zones", get(api::aggregated_zones_handler))
+        .route("/api/zones/{zone_id}", get(api::aggregated_zone_handler))
+        .route(
+            "/api/zones/{zone_id}/now_playing",
+            get(api::aggregated_now_playing_handler),
+        )
+        .route(
+            "/api/adapters/{adapter}/zones",
+            get(api::adapter_zones_handler),
+        )
         // App settings API
         .route("/api/settings", get(api::api_settings_get_handler))
         .route("/api/settings", post(api::api_settings_post_handler))
