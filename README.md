@@ -6,13 +6,41 @@ A source-agnostic hi-fi control bridge that connects music sources and audio pip
 
 Hi-fi software assumes you're at a computer or using vendor-specific apps. This bridge fills the gap:
 
-- **Music Sources:** Roon, Lyrion (formerly LMS/Squeezebox); OpenHome and UPnP/DLNA planned
+- **Music Sources:** Roon, Lyrion/LMS, OpenHome, UPnP/DLNA — all optional, any can contribute zones
 - **Audio Pipeline:** HQPlayer DSP enrichment (link any zone to HQPlayer for upsampling/filtering)
 - **Surfaces:** Anything that speaks HTTP or MQTT — ESP32 hardware, web UIs, Home Assistant, Claude (via MCP), etc.
 
 ## Status
 
-Stable. Works with [roon-knob](https://github.com/muness/roon-knob) for a great hifi controller you can use with Roon, OpenHome or LMS/Lyrion.
+**v3.0.0-rc.1** — Works with [roon-knob](https://github.com/muness/roon-knob) for hardware control of Roon, OpenHome, UPnP, or LMS/Lyrion zones.
+
+## Installation
+
+### Docker (Recommended)
+
+```bash
+docker pull muness/unified-hifi-control:v3.0.0-rc.1
+```
+
+### Synology NAS (DSM 7)
+
+Download the SPK package from [Releases](https://github.com/open-horizon-labs/unified-hifi-control/releases):
+- `unified-hifi-control_*_apollolake.spk` — Intel x86_64 (DS918+, DS920+, etc.)
+- `unified-hifi-control_*_rtd1296.spk` — ARM64 (DS220+, DS420+, etc.)
+
+### QNAP NAS
+
+Download the QPKG package from [Releases](https://github.com/open-horizon-labs/unified-hifi-control/releases):
+- `unified-hifi-control_*_x86_64.qpkg` — Intel/AMD x86_64
+- `unified-hifi-control_*_arm_64.qpkg` — ARM64
+
+### LMS Plugin
+
+Install via Lyrion/LMS Plugin Manager — search for "Unified HiFi Control". The plugin automatically downloads and manages the bridge binary.
+
+### Binary Downloads
+
+Pre-built binaries available for Linux (x64, arm64, armv7), macOS (x64, arm64), and Windows from [Releases](https://github.com/open-horizon-labs/unified-hifi-control/releases).
 
 ## Quick Start (Docker)
 
@@ -20,7 +48,7 @@ Stable. Works with [roon-knob](https://github.com/muness/roon-knob) for a great 
 # docker-compose.yml
 services:
   unified-hifi-control:
-    image: muness/unified-hifi-control:latest
+    image: muness/unified-hifi-control:v3.0.0-rc.1
     network_mode: host  # Required for Roon mDNS discovery
     volumes:
       - ./data:/data  # Config, settings, and firmware stored here
@@ -104,20 +132,20 @@ See [HQPLAYER-MULTI-INSTANCE.md](HQPLAYER-MULTI-INSTANCE.md) for advanced config
 ## Architecture
 
 ```
-┌───────────────────────────────────────────────────────────┐
-│              Unified Hi-Fi Control Bridge                  │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────┐             │
-│  │   Roon   │  │  Lyrion  │  │  HQPlayer    │             │
-│  │          │  │          │  │              │             │
-│  └──────────┘  └──────────┘  └──────────────┘             │
-│                                                            │
-│  HTTP API + optional MQTT                                  │
-└───────────────────────────────────────────────────────────┘
-              │
-    ┌─────────┼─────────┐
-    ▼         ▼         ▼
-  ESP32     Web UI    Home Assistant
-  Knob
+┌─────────────────────────────────────────────────────────────────────┐
+│                   Unified Hi-Fi Control Bridge                       │
+│  ┌────────┐  ┌────────┐  ┌──────────┐  ┌────────┐  ┌──────────┐    │
+│  │  Roon  │  │ Lyrion │  │ OpenHome │  │  UPnP  │  │ HQPlayer │    │
+│  │        │  │  /LMS  │  │          │  │  /DLNA │  │   DSP    │    │
+│  └────────┘  └────────┘  └──────────┘  └────────┘  └──────────┘    │
+│                                                                      │
+│  HTTP API + SSE + optional MQTT                                      │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              ▼               ▼               ▼
+           ESP32           Web UI        Home Assistant
+           Knob                          (via MQTT)
 ```
 
 ## MCP Server (Claude Integration)
@@ -147,7 +175,7 @@ The bridge includes an MCP server that lets Claude control your hi-fi system dir
 
 | Tool | Description |
 |------|-------------|
-| `hifi_zones` | List available zones (Roon, Lyrion) |
+| `hifi_zones` | List available zones (Roon, Lyrion, OpenHome, UPnP) |
 | `hifi_now_playing` | Get current track, artist, album, play state |
 | `hifi_control` | Play, pause, next, previous, volume control |
 | `hifi_hqplayer_status` | HQPlayer Embedded status and pipeline |
