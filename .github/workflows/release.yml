@@ -381,9 +381,7 @@ jobs:
           path: dist/bin/
 
       - name: Make binary executable
-        run: |
-          mv dist/bin/${{ matrix.binary }} dist/bin/unified-hifi-linux-${{ matrix.arch == 'arm_64' && 'arm64' || 'x64' }}
-          chmod +x dist/bin/*
+        run: chmod +x dist/bin/*
 
       - name: Get version
         id: version
@@ -398,7 +396,7 @@ jobs:
       - name: Prepare QNAP package
         run: |
           mkdir -p qnap-build/shared
-          cp dist/bin/unified-hifi-linux-* qnap-build/shared/unified-hifi-control
+          cp dist/bin/${{ matrix.binary }} qnap-build/shared/unified-hifi-control
           chmod +x qnap-build/shared/unified-hifi-control
           cp build/qnap/shared/*.sh qnap-build/shared/
           chmod +x qnap-build/shared/*.sh
