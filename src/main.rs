@@ -3,7 +3,7 @@
 //! A source-agnostic hi-fi control bridge for hardware surfaces and Home Assistant.
 
 use unified_hifi_control::{
-    adapters, aggregator, api, bus, config, coordinator, firmware, knobs, mdns, ui,
+    adapters, aggregator, api, app, bus, config, coordinator, firmware, knobs, mdns, ui,
 };
 
 // Import Startable trait for adapter lifecycle methods
@@ -324,17 +324,8 @@ async fn main() -> Result<()> {
         )
         // Protocol route: /zones returns JSON (for knob, iOS, etc.)
         .route("/zones", get(knobs::knob_zones_handler))
-        // Web UI routes (SSR - Dioxus fullstack migration in progress)
-        .route("/", get(ui::dashboard_page))
-        .route("/ui/zones", get(ui::zones_page))
-        .route("/zone", get(ui::zone_page))
-        .route("/critical", get(ui::zone_page))
-        .route("/admin/critical", get(ui::zone_page))
-        .route("/hqplayer", get(ui::hqplayer_page))
-        .route("/lms", get(ui::lms_page))
-        .route("/knobs", get(ui::knobs_page))
+        // Legacy SSR routes (flash page not yet migrated)
         .route("/knobs/flash", get(ui::flash_page))
-        .route("/settings", get(ui::settings_page))
         // Legacy redirects
         .route("/control", get(ui::control_redirect))
         .route("/admin", get(ui::settings_redirect))
@@ -342,7 +333,10 @@ async fn main() -> Result<()> {
         .layer(CorsLayer::permissive())
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
-        .with_state(state);
+        .with_state(state)
+        // Dioxus fullstack app (serves UI routes with WASM hydration)
+        // This is a fallback - API routes above take priority
+        .merge(dioxus::server::router(app::App));
 
     // Start server with graceful shutdown
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
