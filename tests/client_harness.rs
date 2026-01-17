@@ -34,7 +34,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 use tower::ServiceExt;
 
 use unified_hifi_control::adapters::hqplayer::{HqpInstanceManager, HqpZoneLinkService};
@@ -197,6 +197,7 @@ async fn create_test_app() -> Router {
         aggregator,
         coordinator,
         startable_adapters,
+        Instant::now(),
     );
 
     // Build router with all routes (same as main.rs)

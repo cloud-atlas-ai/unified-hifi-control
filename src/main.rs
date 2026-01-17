@@ -19,6 +19,7 @@ use axum::{
 };
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::signal;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -178,6 +179,7 @@ async fn main() -> Result<()> {
         zone_aggregator,
         coord.clone(),
         startable_adapters.clone(),
+        Instant::now(),
     );
 
     // Build API routes

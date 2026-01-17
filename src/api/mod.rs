@@ -23,7 +23,7 @@ use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 
@@ -42,6 +42,7 @@ pub struct AppState {
     pub aggregator: Arc<ZoneAggregator>,
     pub coordinator: Arc<AdapterCoordinator>,
     pub startable_adapters: Arc<Vec<Arc<dyn Startable>>>,
+    pub start_time: Instant,
 }
 
 impl AppState {
@@ -59,6 +60,7 @@ impl AppState {
         aggregator: Arc<ZoneAggregator>,
         coordinator: Arc<AdapterCoordinator>,
         startable_adapters: Vec<Arc<dyn Startable>>,
+        start_time: Instant,
     ) -> Self {
         Self {
             roon,
@@ -73,6 +75,7 @@ impl AppState {
             aggregator,
             coordinator,
             startable_adapters: Arc::new(startable_adapters),
+            start_time,
         }
     }
 }
@@ -126,7 +129,7 @@ pub async fn status_handler(State(state): State<AppState>) -> Json<StatusRespons
     Json(StatusResponse {
         service: "unified-hifi-control",
         version: env!("CARGO_PKG_VERSION"),
-        uptime_secs: 0, // TODO: Track actual uptime
+        uptime_secs: state.start_time.elapsed().as_secs(),
         roon_connected: roon_status.connected,
         hqplayer_connected: hqp_status.connected,
         lms_connected: lms_status.connected,
