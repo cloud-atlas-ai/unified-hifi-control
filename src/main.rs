@@ -4,6 +4,9 @@
 
 use unified_hifi_control::{adapters, aggregator, api, bus, config, firmware, knobs, mdns, ui};
 
+// Import load_app_settings for checking adapter enabled state
+use api::load_app_settings;
+
 use anyhow::Result;
 use axum::{
     routing::{delete, get, post, put},
@@ -135,20 +138,31 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Initialize OpenHome adapter (SSDP discovery)
+    // Load app settings to check which adapters are enabled
+    let app_settings = load_app_settings();
+
+    // Initialize OpenHome adapter (SSDP discovery) - only start if enabled
     let openhome = Arc::new(adapters::openhome::OpenHomeAdapter::new(bus.clone()));
-    if let Err(e) = openhome.start().await {
-        tracing::warn!("Failed to start OpenHome adapter: {}", e);
+    if app_settings.adapters.openhome {
+        if let Err(e) = openhome.start().await {
+            tracing::warn!("Failed to start OpenHome adapter: {}", e);
+        } else {
+            tracing::info!("OpenHome adapter started (SSDP discovery active)");
+        }
     } else {
-        tracing::info!("OpenHome adapter started (SSDP discovery active)");
+        tracing::info!("OpenHome adapter disabled in settings");
     }
 
-    // Initialize UPnP adapter (SSDP discovery)
+    // Initialize UPnP adapter (SSDP discovery) - only start if enabled
     let upnp = Arc::new(adapters::upnp::UPnPAdapter::new(bus.clone()));
-    if let Err(e) = upnp.start().await {
-        tracing::warn!("Failed to start UPnP adapter: {}", e);
+    if app_settings.adapters.upnp {
+        if let Err(e) = upnp.start().await {
+            tracing::warn!("Failed to start UPnP adapter: {}", e);
+        } else {
+            tracing::info!("UPnP adapter started (SSDP discovery active)");
+        }
     } else {
-        tracing::info!("UPnP adapter started (SSDP discovery active)");
+        tracing::info!("UPnP adapter disabled in settings");
     }
 
     // Initialize ZoneAggregator for unified zone state
