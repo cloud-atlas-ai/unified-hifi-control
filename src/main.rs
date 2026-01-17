@@ -135,25 +135,6 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Initialize MQTT adapter
-    let mqtt = Arc::new(adapters::mqtt::MqttAdapter::new(bus.clone()));
-    if let Some(ref mqtt_config) = config.mqtt {
-        mqtt.configure(
-            mqtt_config.host.clone(),
-            Some(mqtt_config.port),
-            mqtt_config.username.clone(),
-            mqtt_config.password.clone(),
-            mqtt_config.topic_prefix.clone(),
-        )
-        .await;
-
-        if let Err(e) = mqtt.start().await {
-            tracing::warn!("Failed to start MQTT adapter: {}", e);
-        } else {
-            tracing::info!("MQTT adapter started for {}", mqtt_config.host);
-        }
-    }
-
     // Initialize OpenHome adapter (SSDP discovery)
     let openhome = Arc::new(adapters::openhome::OpenHomeAdapter::new(bus.clone()));
     if let Err(e) = openhome.start().await {
@@ -185,7 +166,6 @@ async fn main() -> Result<()> {
         hqp_instances,
         hqp_zone_links,
         lms.clone(),
-        mqtt.clone(),
         openhome.clone(),
         upnp.clone(),
         knob_store,
@@ -392,7 +372,6 @@ async fn main() -> Result<()> {
         fw.stop();
     }
     lms.stop().await;
-    mqtt.stop().await;
     openhome.stop().await;
     upnp.stop().await;
     tracing::info!("Shutdown complete");
