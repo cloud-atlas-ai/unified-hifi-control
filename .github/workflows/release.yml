@@ -311,7 +311,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - arch: x86_64
+          - arch: apollolake
             target: x86_64-unknown-linux-musl
             binary: unified-hifi-linux-x64
           - arch: rtd1296
