@@ -36,7 +36,11 @@ Download the QPKG package from [Releases](https://github.com/open-horizon-labs/u
 
 ### LMS Plugin
 
-Install via Lyrion/LMS Plugin Manager — search for "Unified HiFi Control". The plugin automatically downloads and manages the bridge binary.
+Add this repository URL in LMS Settings → Plugins → Additional Repositories:
+```
+https://raw.githubusercontent.com/open-horizon-labs/unified-hifi-control/v3/lms-plugin/repo.xml
+```
+Then install "Unified Hi-Fi Control" from the plugin list. The plugin automatically downloads and manages the bridge binary.
 
 ### Binary Downloads
 

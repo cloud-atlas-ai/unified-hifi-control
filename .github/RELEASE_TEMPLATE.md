@@ -1,28 +1,35 @@
+## Installation
 
----
-
-## Docker Compose
+### Docker
 
 ```yaml
 services:
   unified-hifi-control:
     image: muness/unified-hifi-control:{{VERSION}}
-    network_mode: host  # Required for Roon mDNS discovery
+    network_mode: host
     volumes:
-      - ./data:/data  # Config + firmware stored here
+      - ./data:/data
     environment:
-      - PORT=8088
       - CONFIG_DIR=/data
     restart: unless-stopped
 ```
 
-**Update:** `docker compose pull && docker compose up -d`
+```bash
+docker compose up -d
+# Access http://localhost:8088
+```
 
-**First time:** `docker compose up -d`
+### LMS Plugin
 
-Then access http://localhost:8088/admin
+Add this repository URL in LMS Settings → Plugins → Additional Repositories:
+```
+https://raw.githubusercontent.com/open-horizon-labs/unified-hifi-control/v3/lms-plugin/repo.xml
+```
+Then install "Unified Hi-Fi Control" from the plugin list.
 
-**Note:** Port 8088 is also HQPlayer's default. If running both on the same host, change one.
+### Synology / QNAP
+
+Download the SPK or QPKG package from the assets below.
 
 ---
 
@@ -46,11 +53,4 @@ Then access http://localhost:8088/admin
 
 ## Configuration
 
-**HQPlayer:** Configure via `/admin` UI or environment variables:
-- `HQP_HOST` - HQPlayer Embedded IP
-- `HQP_PORT` - Web UI port (default: 8088)
-- `HQP_USER` - Username (required for profile changes)
-- `HQP_PASS` - Password
-
-**MQTT (Home Assistant):**
-- `MQTT_BROKER` - e.g., `mqtt://192.168.1.x:1883`
+Configure all backends (Roon, LMS, HQPlayer, UPnP/OpenHome) via the web UI at `/settings`.
