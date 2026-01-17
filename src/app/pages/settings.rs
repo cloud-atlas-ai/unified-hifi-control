@@ -8,7 +8,6 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
-
 /// Adapter settings from /api/settings
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct AdapterSettings {
@@ -111,9 +110,7 @@ pub fn Settings() -> Element {
     let mut discovery = use_signal(DiscoveryStatus::default);
 
     // Load initial settings
-    let settings_resource = use_resource(move || async move {
-        get_settings().await
-    });
+    let settings_resource = use_resource(move || async move { get_settings().await });
 
     // Update signals when settings load
     use_effect(move || {
@@ -126,9 +123,7 @@ pub fn Settings() -> Element {
     });
 
     // Load discovery status
-    let discovery_resource = use_resource(move || async move {
-        get_discovery_status().await
-    });
+    let discovery_resource = use_resource(move || async move { get_discovery_status().await });
 
     use_effect(move || {
         if let Some(Ok(status)) = discovery_resource.read().as_ref() {

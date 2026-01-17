@@ -114,7 +114,10 @@ async fn main() -> Result<()> {
     if hqplayer.is_configured().await {
         match hqplayer.get_pipeline_status().await {
             Ok(_) => tracing::info!("HQPlayer auto-connected at startup"),
-            Err(e) => tracing::warn!("HQPlayer auto-connect failed (will retry on page access): {}", e),
+            Err(e) => tracing::warn!(
+                "HQPlayer auto-connect failed (will retry on page access): {}",
+                e
+            ),
         }
     }
 
