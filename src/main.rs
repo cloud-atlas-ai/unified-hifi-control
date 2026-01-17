@@ -280,17 +280,6 @@ async fn main() -> Result<()> {
             get(api::upnp_now_playing_handler),
         )
         .route("/upnp/control", post(api::upnp_control_handler))
-        // Aggregated zones API (unified across all adapters)
-        .route("/api/zones", get(api::aggregated_zones_handler))
-        .route("/api/zones/{zone_id}", get(api::aggregated_zone_handler))
-        .route(
-            "/api/zones/{zone_id}/now_playing",
-            get(api::aggregated_now_playing_handler),
-        )
-        .route(
-            "/api/adapters/{adapter}/zones",
-            get(api::adapter_zones_handler),
-        )
         // App settings API
         .route("/api/settings", get(api::api_settings_get_handler))
         .route("/api/settings", post(api::api_settings_post_handler))

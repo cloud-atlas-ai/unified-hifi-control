@@ -1422,63 +1422,6 @@ pub async fn hqp_discover_handler(Query(params): Query<HqpDiscoverRequest>) -> i
 }
 
 // =============================================================================
-// Aggregated zones handlers
-// =============================================================================
-
-/// GET /api/zones - Get all zones from all adapters (aggregated)
-pub async fn aggregated_zones_handler(
-    State(state): State<AppState>,
-) -> Json<ZonesWrapper<crate::bus::Zone>> {
-    Json(ZonesWrapper {
-        zones: state.aggregator.get_zones().await,
-    })
-}
-
-/// GET /api/zones/:zone_id - Get specific zone from aggregator
-pub async fn aggregated_zone_handler(
-    State(state): State<AppState>,
-    Path(zone_id): Path<String>,
-) -> impl IntoResponse {
-    match state.aggregator.get_zone(&zone_id).await {
-        Some(zone) => (StatusCode::OK, Json(zone)).into_response(),
-        None => (
-            StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                error: format!("Zone not found: {}", zone_id),
-            }),
-        )
-            .into_response(),
-    }
-}
-
-/// GET /api/zones/:zone_id/now_playing - Get now playing for a zone
-pub async fn aggregated_now_playing_handler(
-    State(state): State<AppState>,
-    Path(zone_id): Path<String>,
-) -> impl IntoResponse {
-    match state.aggregator.get_now_playing(&zone_id).await {
-        Some(np) => (StatusCode::OK, Json(np)).into_response(),
-        None => (
-            StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                error: format!("No now playing info for zone: {}", zone_id),
-            }),
-        )
-            .into_response(),
-    }
-}
-
-/// GET /api/adapters/:adapter/zones - Get zones for specific adapter
-pub async fn adapter_zones_handler(
-    State(state): State<AppState>,
-    Path(adapter): Path<String>,
-) -> Json<ZonesWrapper<crate::bus::Zone>> {
-    Json(ZonesWrapper {
-        zones: state.aggregator.get_zones_by_adapter(&adapter).await,
-    })
-}
-
-// =============================================================================
 // App settings handlers
 // =============================================================================
 
