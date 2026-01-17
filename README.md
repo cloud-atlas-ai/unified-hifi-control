@@ -49,28 +49,17 @@ Pre-built binaries available for Linux (x64, arm64, armv7), macOS (x64, arm64), 
 services:
   unified-hifi-control:
     image: muness/unified-hifi-control:v3.0.0-rc.1
-    network_mode: host  # Required for Roon mDNS discovery
+    network_mode: host  # Required for Roon/UPnP discovery
     volumes:
-      - ./data:/data  # Config, settings, and firmware stored here
+      - ./data:/data
     environment:
-      - PORT=8088
       - CONFIG_DIR=/data
-      # Optional: Lyrion configuration (or configure via web UI at /settings)
-      # - LMS_HOST=192.168.1.x
-      # - LMS_PORT=9000
-      # - LMS_USERNAME=admin
-      # - LMS_PASSWORD=secret
-      # Optional: Firmware auto-update (default: true)
-      # - FIRMWARE_AUTO_UPDATE=false
-      # Optional: Firmware polling interval when auto-update enabled
-      # - FIRMWARE_POLL_INTERVAL_MINUTES=360  # 6 hours (default)
-      # - FIRMWARE_POLL_INTERVAL_MINUTES=1440 # 24 hours
     restart: unless-stopped
 ```
 
 ```bash
 docker compose up -d
-# Access http://localhost:8088/admin
+# Access http://localhost:8088
 ```
 
 **Note:** Port 8088 is also HQPlayer's default. If running both on the same host, change one.
