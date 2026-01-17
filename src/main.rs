@@ -110,6 +110,14 @@ async fn main() -> Result<()> {
         }
     }
 
+    // Auto-connect HQPlayer if configured (establishes TCP connection at startup)
+    if hqplayer.is_configured().await {
+        match hqplayer.get_pipeline_status().await {
+            Ok(_) => tracing::info!("HQPlayer auto-connected at startup"),
+            Err(e) => tracing::warn!("HQPlayer auto-connect failed (will retry on page access): {}", e),
+        }
+    }
+
     // HQP zone link service
     let hqp_zone_links = Arc::new(adapters::hqplayer::HqpZoneLinkService::new(
         hqp_instances.clone(),

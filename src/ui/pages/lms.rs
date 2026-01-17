@@ -15,11 +15,21 @@ const LMS_SCRIPT: &str = r#"
 async function loadLmsPlayers() {
     const section = document.querySelector('#lms-players article');
     try {
+        // Check if LMS adapter is enabled
+        const settings = await fetch('/api/settings').then(r => r.json()).catch(() => ({}));
+        const lmsEnabled = settings?.adapters?.lms === true;
+
+        if (!lmsEnabled) {
+            section.removeAttribute('aria-busy');
+            section.innerHTML = '<p>LMS adapter is disabled. <a href="/settings">Enable it in Settings</a> to discover players.</p>';
+            return;
+        }
+
         const players = await fetch('/lms/players').then(r => r.json());
         section.removeAttribute('aria-busy');
 
         if (!players || !players.length) {
-            section.innerHTML = '<p>No players found</p>';
+            section.innerHTML = '<p>No players found. Make sure your Squeezebox server is configured and reachable.</p>';
             return;
         }
 
