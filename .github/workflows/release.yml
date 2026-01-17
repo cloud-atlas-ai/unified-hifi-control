@@ -499,7 +499,14 @@ jobs:
         run: |
           ZIP_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/lms-unified-hifi-control-${{ steps.version.outputs.version }}.zip"
           echo "Downloading $ZIP_URL"
-          curl -sL "$ZIP_URL" -o lms-plugin.zip
+          curl -fSL --retry 3 --retry-delay 5 "$ZIP_URL" -o lms-plugin.zip
+          # Verify download succeeded and file is valid (> 1KB)
+          FILE_SIZE=$(stat -c%s lms-plugin.zip 2>/dev/null || stat -f%z lms-plugin.zip)
+          if [ "$FILE_SIZE" -lt 1024 ]; then
+            echo "Error: Downloaded file too small ($FILE_SIZE bytes), expected > 1KB"
+            exit 1
+          fi
+          echo "Downloaded $FILE_SIZE bytes"
           SHA=$(sha1sum lms-plugin.zip | cut -d' ' -f1)
           echo "sha=$SHA" >> $GITHUB_OUTPUT
           echo "Computed SHA: $SHA"
