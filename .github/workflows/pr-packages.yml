@@ -305,12 +305,22 @@ jobs:
           sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" build/synology/package.json
 
       - name: Build Synology SPK
+        id: build-spk
         uses: tomgrv/synology-package-builder@v1
         with:
           dsm: '7.0'
           arch: ${{ matrix.arch }}
           projects: ./build/synology
           output: ./dist/installers
+
+      - name: Debug - List output directory
+        run: |
+          echo "=== Action outputs ==="
+          echo "packages: ${{ steps.build-spk.outputs.packages }}"
+          echo "=== dist/installers ==="
+          ls -la ./dist/installers/ 2>/dev/null || echo "dist/installers not found"
+          echo "=== Find all SPK files ==="
+          find . -name "*.spk" -type f 2>/dev/null || echo "No SPK files found"
 
       - name: Upload Synology package
         uses: actions/upload-artifact@v4
