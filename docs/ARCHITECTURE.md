@@ -2,83 +2,86 @@
 
 ## Vision
 
-A source-agnostic hi-fi control platform where **complexity is absorbed by clear boundaries, not distributed across components**.
+A source-agnostic hi-fi control platform where **complexity is absorbed by the bus and coordinator, not distributed across adapters or UI**.
 
-## Rust v3 Pattern: Distributed State with Notification Bus
-
-The Rust implementation uses a pattern optimized for Rust's ownership model:
+## Target Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                      main.rs                             │
-│  (creates adapters based on config + settings)          │
+│                   AdapterCoordinator                     │
+│  (owns lifecycle: start/stop based on settings)         │
+│  (publishes ShuttingDown on Ctrl+C)                     │
 └─────────────────────────────────────────────────────────┘
            │
            ▼
 ┌─────────────────────────────────────────────────────────┐
-│                       AppState                           │
-│  (shared reference to all adapters)                     │
+│                       EventBus                           │
+│  (tokio broadcast: zone events, commands, lifecycle)    │
 └─────────────────────────────────────────────────────────┘
-     │           │           │              │
-     ▼           ▼           ▼              ▼
+     ▲           ▲           ▲              │
+     │           │           │              ▼
 ┌────────┐  ┌────────┐  ┌────────┐   ┌─────────────┐
-│  LMS   │  │  Roon  │  │ UPnP   │   │  EventBus   │
-│Adapter │  │Adapter │  │Adapter │   │ (broadcast) │
-│ State  │  │ State  │  │ State  │   └─────────────┘
+│ LMS    │  │ Roon   │  │ UPnP   │   │   Zone      │
+│Handle  │  │Handle  │  │Handle  │   │ Aggregator  │
+│        │  │        │  │        │   │ (state)     │
+│[Logic] │  │[Logic] │  │[Logic] │   └─────────────┘
 └────────┘  └────────┘  └────────┘          │
                                              ▼
                                       ┌─────────────┐
-                                      │  SSE /events│
-                                      │  (realtime) │
+                                      │   API/UI    │
+                                      │   + SSE     │
                                       └─────────────┘
 ```
 
-### Why Distributed State for Rust
+## Key Components
 
-| Centralized Aggregator | Distributed State (v3) |
-|------------------------|------------------------|
-| Single `RwLock` contention | Independent locks per adapter |
-| Channel hops add latency | Direct adapter access |
-| Complex event routing | Simple `Arc<Adapter>` sharing |
-| Debugging: "where did event go?" | Debugging: check adapter state |
+### AdapterCoordinator
+- Single decision point for adapter lifecycle
+- Starts only enabled adapters
+- Publishes `ShuttingDown` on Ctrl+C
+- Waits for adapter ACKs before exit
 
-The distributed pattern with `Arc<RwLock<State>>` per adapter is idiomatic Rust for async systems.
+### AdapterHandle + AdapterLogic
+- **AdapterLogic trait**: Adapter-specific discovery/protocol (what varies)
+- **AdapterHandle**: Wraps logic with consistent lifecycle (what's common)
+- Adapters can't forget shutdown handling - the handle does it
+- ACK on stop is automatic
 
-### How It Works
+### EventBus
+- Zone lifecycle: `ZoneDiscovered`, `ZoneUpdated`, `ZoneRemoved`
+- Now playing: `NowPlayingChanged`
+- Commands: `Command`, `CommandResponse`
+- Lifecycle: `AdapterStopping`, `AdapterStopped`, `ZonesFlushed`, `ShuttingDown`
 
-1. **Adapters own their state** - Each adapter has its own `Arc<RwLock<State>>`
-2. **API aggregates on demand** - `get_all_zones_internal()` queries each enabled adapter
-3. **Bus is for notifications** - Real-time updates via SSE, not state synchronization
-4. **Zone ID prefix routes commands** - `roon:zone_123` → RoonAdapter.control()
+### ZoneAggregator
+- Single source of truth for zone state
+- Subscribes to bus, maintains `HashMap<zone_id, Zone>`
+- Flushes zones on `AdapterStopping`
+- API calls this, never adapters directly
 
-### Key Principles
+## Principles
 
-1. **Disabled backend = adapter not started = nothing to show**
-   - Check `AdapterSettings` before calling `adapter.start()` in `main.rs`
-   - UI never shows "searching" for a disabled backend
+1. **Disabled adapter = not started = nothing to show**
+   - Coordinator checks settings before start
+   - No "searching" for disabled backends
 
 2. **Zone identity is the zone_id prefix**
-   - `roon:`, `lms:`, `openhome:`, `upnp:`
-   - No separate `source` or `protocol` fields needed
+   - `roon:`, `lms:`, `openhome:`, `upnp:`, `hqp:`
+   - No separate `source` or `protocol` fields
 
-3. **Adapters are self-contained**
-   - Handle their own discovery, state, and reconnection
-   - Expose clean async interface to API layer
+3. **Adapters are event publishers**
+   - Don't store zones (aggregator does)
+   - Publish events, handle commands
+   - Lifecycle managed by handle
 
-4. **API layer aggregates**
-   - Query adapters, merge results, return to client
-   - No persistent aggregated state (stateless aggregation)
-
-## Anti-Patterns to Avoid
-
-| Anti-Pattern | Why It's Wrong | Correct Approach |
-|--------------|----------------|------------------|
-| Adapter runs when disabled | Shows "searching" for nothing | Check settings before `start()` |
-| UI polls for discovery status | UI knows too much about adapters | Expose unified status endpoint |
-| Parallel state in UI | State sync bugs | UI is stateless, queries API |
+4. **Clean shutdown path**
+   - `ShuttingDown` → SSE handlers close
+   - `AdapterStopping(prefix)` → Aggregator flushes
+   - `stop()` with ACK → Coordinator waits
+   - No hanging on Ctrl+C
 
 ## Implementation
 
-See [adapter.md](./adapter.md) for the adapter implementation pattern (Node.js v2 reference).
+See [ARCHITECTURE-RECOMMENDATION-A.md](./ARCHITECTURE-RECOMMENDATION-A.md) for detailed implementation plan.
 
-See [ARCHITECTURE-GAP-ANALYSIS.md](./ARCHITECTURE-GAP-ANALYSIS.md) for the analysis of v3 vs original vision.
+See [ARCHITECTURE-GAP-ANALYSIS.md](./ARCHITECTURE-GAP-ANALYSIS.md) for analysis of current state vs this vision.
