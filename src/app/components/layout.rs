@@ -94,9 +94,10 @@ pub fn Layout(props: LayoutProps) -> Element {
             small { "Unified Hi-Fi Control v{version}" }
             ThemeSwitcher {}
         }
-        document::Script { {THEME_FUNCTIONS} }
+        // Scripts that manipulate DOM must be inline at end of body, not in head
+        script { dangerous_inner_html: THEME_FUNCTIONS }
         if let Some(scripts) = props.scripts {
-            document::Script { {scripts} }
+            script { dangerous_inner_html: "{scripts}" }
         }
     }
 }

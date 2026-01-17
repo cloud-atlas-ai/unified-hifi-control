@@ -133,8 +133,12 @@ async function loadDiscoveryStatus() {
     }
 }
 
-// Load on page load and set up SSE for updates
-loadDiscoveryStatus();
+// Load on page load (wait for DOM) and set up SSE for updates
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadDiscoveryStatus);
+} else {
+    loadDiscoveryStatus();
+}
 
 const es = new EventSource('/events');
 es.onmessage = (e) => {
