@@ -16,6 +16,9 @@ else ifeq ($(UNAME_S),Linux)
     else
         TAILWIND_BINARY := tailwindcss-linux-x64
     endif
+else
+    $(warning Unsupported OS: $(UNAME_S). Tailwind CLI download may fail.)
+    TAILWIND_BINARY := tailwindcss-linux-x64
 endif
 
 .PHONY: help setup-tailwind css css-watch clean

@@ -38,6 +38,7 @@ pub fn Button(
         document::Link { rel: "stylesheet", href: asset!("./style.css") }
 
         button {
+            r#type: "button",
             class: "button",
             "data-style": variant.class(),
             onclick: move |event| {

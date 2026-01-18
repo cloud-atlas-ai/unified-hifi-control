@@ -26,9 +26,14 @@
 }
 
 .navbar-nav[data-state="open"] .navbar-trigger {
-  background-color: var(--light, var(--primary-color-4))
-    var(--dark, var(--primary-color-7));
+  background-color: var(--primary-color-7);
   color: var(--secondary-color-1);
+}
+
+@media (prefers-color-scheme: light) {
+  .navbar-nav[data-state="open"] .navbar-trigger {
+    background-color: var(--primary-color-4);
+  }
 }
 
 .navbar-trigger[data-disabled="true"] {
@@ -38,10 +43,16 @@
 
 .navbar-trigger:hover:not([data-disabled="true"]),
 .navbar-trigger:focus-visible {
-  background: var(--light, var(--primary-color-4))
-    var(--dark, var(--primary-color-7));
+  background-color: var(--primary-color-7);
   color: var(--secondary-color-1);
   outline: none;
+}
+
+@media (prefers-color-scheme: light) {
+  .navbar-trigger:hover:not([data-disabled="true"]),
+  .navbar-trigger:focus-visible {
+    background-color: var(--primary-color-4);
+  }
 }
 
 /* Include the top margin in the navbar content pointer events */
@@ -63,14 +74,19 @@
   padding: 0.25rem;
   border-radius: 0.5rem;
   margin-top: 0.5rem;
-  background: var(--light, var(--primary-color))
-    var(--dark, var(--primary-color-5));
-  box-shadow: inset 0 0 0 1px var(--light, var(--primary-color-6))
-    var(--dark, var(--primary-color-7));
+  background: var(--primary-color-5);
+  box-shadow: inset 0 0 0 1px var(--primary-color-7);
   opacity: 0;
   pointer-events: none;
   transform-origin: top;
   will-change: transform, opacity;
+}
+
+@media (prefers-color-scheme: light) {
+  .navbar-content {
+    background: var(--primary-color);
+    box-shadow: inset 0 0 0 1px var(--primary-color-6);
+  }
 }
 
 .navbar-nav:first-child .navbar-content {
@@ -118,13 +134,19 @@
 
 .navbar-item:hover:not([data-disabled="true"]),
 .navbar-item:focus-visible {
-  background: var(--light, var(--primary-color-4))
-    var(--dark, var(--primary-color-7));
+  background-color: var(--primary-color-7);
   color: var(--secondary-color-1);
   outline: none;
 }
 
-[data-disabled="true"] {
+@media (prefers-color-scheme: light) {
+  .navbar-item:hover:not([data-disabled="true"]),
+  .navbar-item:focus-visible {
+    background-color: var(--primary-color-4);
+  }
+}
+
+.navbar [data-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.5;
 }

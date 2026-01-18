@@ -127,12 +127,8 @@ pub fn Lms() -> Element {
     };
 
     let cfg = config.read().clone().flatten();
-    let lms_enabled = settings
-        .read()
-        .clone()
-        .flatten()
-        .map(|s| s.adapters.lms)
-        .unwrap_or(false);
+    let settings_loading = settings.read().is_none();
+    let lms_enabled = settings.read().clone().flatten().map(|s| s.adapters.lms);
     let players_list = players.read().clone().flatten().unwrap_or_default();
     let is_loading = config.read().is_none();
 
@@ -254,7 +250,9 @@ pub fn Lms() -> Element {
                     p { class: "text-gray-400 text-sm", "Connected Squeezebox players" }
                 }
 
-                if !lms_enabled {
+                if settings_loading {
+                    div { class: "card p-6", aria_busy: "true", "Loading settings..." }
+                } else if matches!(lms_enabled, Some(false)) {
                     div { class: "card p-6",
                         p { class: "text-gray-400",
                             "LMS adapter is disabled. "

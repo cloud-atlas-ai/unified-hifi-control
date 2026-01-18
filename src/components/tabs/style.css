@@ -18,8 +18,13 @@
 }
 
 [data-variant="default"] .tabs-list {
-    background: var(--light, var(--primary-color-3))
-        var(--dark, var(--primary-color-5));
+    background: var(--primary-color-5);
+}
+
+@media (prefers-color-scheme: light) {
+    [data-variant="default"] .tabs-list {
+        background: var(--primary-color-3);
+    }
 }
 
 .tabs-trigger {
@@ -32,10 +37,15 @@
 }
 
 [data-variant="default"] .tabs-trigger[data-state="active"] {
-    background-color: var(--light, var(--primary-color))
-        var(--dark, var(--primary-color-6));
-    box-shadow: var(--dark, inset 0 0 0 1px var(--primary-color-7))
-        var(--light, 0 1px 2px rgb(0 0 0 / 18%));
+    background-color: var(--primary-color-6);
+    box-shadow: inset 0 0 0 1px var(--primary-color-7);
+}
+
+@media (prefers-color-scheme: light) {
+    [data-variant="default"] .tabs-trigger[data-state="active"] {
+        background-color: var(--primary-color);
+        box-shadow: 0 1px 2px rgb(0 0 0 / 18%);
+    }
 }
 
 .tabs-trigger[data-state="active"] {
@@ -59,12 +69,18 @@
 }
 
 [data-variant="default"] .tabs-content-themed {
-    border: 1px solid var(--light, var(--primary-color-6))
-        var(--dark, var(--primary-color-7));
+    border: 1px solid var(--primary-color-7);
     border-radius: 0.5rem;
-    background: var(--light, var(--primary-color))
-        var(--dark, var(--primary-color-3));
-    box-shadow: var(--light, 0 1px 2px rgb(0 0 0 / 18%)) var(--dark, none);
+    background: var(--primary-color-3);
+    box-shadow: none;
+}
+
+@media (prefers-color-scheme: light) {
+    [data-variant="default"] .tabs-content-themed {
+        border-color: var(--primary-color-6);
+        background: var(--primary-color);
+        box-shadow: 0 1px 2px rgb(0 0 0 / 18%);
+    }
 }
 
 .tabs-content[data-state="inactive"] {

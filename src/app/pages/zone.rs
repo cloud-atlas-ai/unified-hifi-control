@@ -299,7 +299,7 @@ fn ZoneDisplay(
                         p { style: "margin:0;", small { "{artist}" } }
                     }
                     if !album.is_empty() {
-                        p { style: "margin:0;color:var(--pico-muted-color);", small { "{album}" } }
+                        p { class: "text-gray-500", style: "margin:0;", small { "{album}" } }
                     }
                     hr {}
                     div { style: "display:flex;gap:0.5rem;align-items:center;margin:1rem 0;",
