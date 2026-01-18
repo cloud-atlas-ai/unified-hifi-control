@@ -209,7 +209,13 @@ The v3 rewrite was motivated by packaging requests (NAS users wanted native pack
 ```bash
 rustup target add wasm32-unknown-unknown
 cargo install dioxus-cli --locked
+
+# Optional: shared compilation cache (speeds up rebuilds significantly)
 brew install sccache  # macOS, or: cargo install sccache
+echo 'export RUSTC_WRAPPER=sccache' >> ~/.zshrc  # or ~/.bashrc
+
+# Install pre-commit hook (runs fmt + clippy)
+cp scripts/pre-commit .git/hooks/
 ```
 
 ### Build

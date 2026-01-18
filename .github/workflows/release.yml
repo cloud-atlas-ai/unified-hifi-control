@@ -5,10 +5,6 @@ on:
     types: [published]
   workflow_dispatch:
 
-env:
-  # Override .cargo/config.toml sccache setting (not installed on runners)
-  RUSTC_WRAPPER: ""
-
 jobs:
   # Build web assets (WASM + JS) - runs once, shared by all platforms
   build-web-assets:

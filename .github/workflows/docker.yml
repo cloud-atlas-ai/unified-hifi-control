@@ -16,10 +16,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # Override .cargo/config.toml sccache setting (not installed on runners)
-  RUSTC_WRAPPER: ""
-
 jobs:
   lint:
     name: Lint
