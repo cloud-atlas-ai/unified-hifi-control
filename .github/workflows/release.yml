@@ -6,6 +6,34 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Build web assets (WASM + JS) - runs once, shared by all platforms
+  build-web-assets:
+    name: Build Web Assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Dioxus CLI
+        run: cargo install dioxus-cli --locked
+
+      - name: Build web assets
+        run: dx build --release --platform web --features web
+
+      - name: Upload web assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-assets
+          path: target/dx/unified-hifi-control/release/web/public/
+          retention-days: 1
+
   build-linux:
     name: Build Linux (musl static)
     runs-on: ubuntu-latest
@@ -149,7 +177,7 @@ jobs:
 
   build-linux-packages:
     name: Build Linux Packages (deb/rpm)
-    needs: [build-linux]
+    needs: [build-linux, build-web-assets]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -160,6 +188,12 @@ jobs:
           pattern: binary-*-linux-*
           path: dist/bin/
           merge-multiple: true
+
+      - name: Download web assets
+        uses: actions/download-artifact@v4
+        with:
+          name: web-assets
+          path: dist/public/
 
       - name: Make binaries executable
         run: chmod +x dist/bin/*
@@ -191,6 +225,7 @@ jobs:
             -a amd64 \
             --after-install build/linux/postinst.sh \
             dist/bin/unified-hifi-linux-x64=/usr/bin/unified-hifi-control \
+            dist/public=/usr/share/unified-hifi-control/public \
             build/linux/unified-hifi-control.service=/etc/systemd/system/unified-hifi-control.service
 
       - name: Build rpm package (x64)
@@ -204,6 +239,7 @@ jobs:
             -a x86_64 \
             --after-install build/linux/postinst.sh \
             dist/bin/unified-hifi-linux-x64=/usr/bin/unified-hifi-control \
+            dist/public=/usr/share/unified-hifi-control/public \
             build/linux/unified-hifi-control.service=/etc/systemd/system/unified-hifi-control.service
 
       - name: Build deb package (arm64)
@@ -217,6 +253,7 @@ jobs:
             -a arm64 \
             --after-install build/linux/postinst.sh \
             dist/bin/unified-hifi-linux-arm64=/usr/bin/unified-hifi-control \
+            dist/public=/usr/share/unified-hifi-control/public \
             build/linux/unified-hifi-control.service=/etc/systemd/system/unified-hifi-control.service
 
       - name: Build deb package (armv7/armhf)
@@ -230,6 +267,7 @@ jobs:
             -a armhf \
             --after-install build/linux/postinst.sh \
             dist/bin/unified-hifi-linux-armv7=/usr/bin/unified-hifi-control \
+            dist/public=/usr/share/unified-hifi-control/public \
             build/linux/unified-hifi-control.service=/etc/systemd/system/unified-hifi-control.service
 
       - name: Upload Linux packages
@@ -306,7 +344,7 @@ jobs:
 
   build-synology-packages:
     name: Build Synology Packages
-    needs: [build-linux]
+    needs: [build-linux, build-web-assets]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -325,6 +363,12 @@ jobs:
         with:
           name: binary-${{ matrix.target }}
           path: build/synology/package/
+
+      - name: Download web assets
+        uses: actions/download-artifact@v4
+        with:
+          name: web-assets
+          path: build/synology/package/public/
 
       - name: Rename binary
         run: |
@@ -360,7 +404,7 @@ jobs:
 
   build-qnap-packages:
     name: Build QNAP Packages
-    needs: [build-linux]
+    needs: [build-linux, build-web-assets]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -380,6 +424,12 @@ jobs:
           name: binary-${{ matrix.target }}
           path: dist/bin/
 
+      - name: Download web assets
+        uses: actions/download-artifact@v4
+        with:
+          name: web-assets
+          path: dist/public/
+
       - name: Make binary executable
         run: chmod +x dist/bin/*
 
@@ -398,6 +448,7 @@ jobs:
           mkdir -p qnap-build/shared
           cp dist/bin/${{ matrix.binary }} qnap-build/shared/unified-hifi-control
           chmod +x qnap-build/shared/unified-hifi-control
+          cp -r dist/public qnap-build/shared/public
           cp build/qnap/shared/*.sh qnap-build/shared/
           chmod +x qnap-build/shared/*.sh
           sed "s/{{VERSION}}/${{ steps.version.outputs.version }}/" build/qnap/qpkg.cfg > qnap-build/qpkg.cfg
@@ -457,7 +508,7 @@ jobs:
 
   summary:
     name: Build Summary
-    needs: [build-linux, build-macos, build-windows]
+    needs: [build-linux, build-macos, build-windows, build-web-assets]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -466,6 +517,12 @@ jobs:
           path: artifacts/
           pattern: binary-*
 
+      - name: Download web assets
+        uses: actions/download-artifact@v4
+        with:
+          name: web-assets
+          path: artifacts/web-assets/
+
       - name: Display build summary
         run: |
           echo "## Release Build Summary" >> $GITHUB_STEP_SUMMARY
@@ -473,6 +530,15 @@ jobs:
           echo "| Binary | Size |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|------|" >> $GITHUB_STEP_SUMMARY
           find artifacts -type f -name "unified-hifi-*" | while read f; do
+            size=$(du -h "$f" | cut -f1)
+            name=$(basename "$f")
+            echo "| $name | $size |" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Web Assets" >> $GITHUB_STEP_SUMMARY
+          echo "| File | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------|" >> $GITHUB_STEP_SUMMARY
+          find artifacts/web-assets -type f | while read f; do
             size=$(du -h "$f" | cut -f1)
             name=$(basename "$f")
             echo "| $name | $size |" >> $GITHUB_STEP_SUMMARY
