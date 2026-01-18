@@ -30,6 +30,7 @@ jobs:
         with:
           shared-key: "native-build"
           cache-all-crates: true
+          cache-on-failure: true
 
       - name: Check formatting
         run: cargo fmt --check
@@ -51,6 +52,7 @@ jobs:
         with:
           shared-key: "native-build"
           cache-all-crates: true
+          cache-on-failure: true
 
       - name: Run tests
         run: cargo test --workspace
@@ -73,6 +75,7 @@ jobs:
         with:
           shared-key: "wasm-build"
           cache-all-crates: true
+          cache-on-failure: true
 
       - name: Cache Dioxus CLI
         id: cache-dx
@@ -84,6 +87,9 @@ jobs:
       - name: Install Dioxus CLI
         if: steps.cache-dx.outputs.cache-hit != 'true'
         run: cargo install dioxus-cli --locked
+
+      - name: Build Tailwind CSS
+        run: make css
 
       - name: Build web assets
         run: dx build --release --platform web --features web

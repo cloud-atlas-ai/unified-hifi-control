@@ -27,8 +27,8 @@ case "$1" in
     cd "$QPKG_ROOT" || { echo "Failed to cd to $QPKG_ROOT"; exit 1; }
 
     # Start the static binary (musl-linked, no dependencies)
-    ${QPKG_ROOT}/unified-hifi-control >> $LOGF 2>&1 &
-    echo $! > $PIDF
+    "${QPKG_ROOT}/unified-hifi-control" >> "$LOGF" 2>&1 &
+    echo $! > "$PIDF"
 
     echo "$QPKG_NAME started."
     ;;

@@ -33,6 +33,7 @@ jobs:
         with:
           shared-key: "native-build"
           cache-all-crates: true
+          cache-on-failure: true
 
       - name: Check formatting
         run: cargo fmt --check
@@ -54,6 +55,7 @@ jobs:
         with:
           shared-key: "native-build"
           cache-all-crates: true
+          cache-on-failure: true
 
       - name: Run tests
         run: cargo test --workspace

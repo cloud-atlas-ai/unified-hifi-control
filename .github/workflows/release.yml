@@ -251,7 +251,7 @@ jobs:
             -a amd64 \
             --after-install build/linux/postinst.sh \
             dist/bin/unified-hifi-linux-x64=/usr/bin/unified-hifi-control \
-            dist/public=/usr/share/unified-hifi-control/public \
+            dist/public/=/usr/share/unified-hifi-control/public \
             build/linux/unified-hifi-control.service=/etc/systemd/system/unified-hifi-control.service
 
       - name: Build rpm package (x64)
@@ -265,7 +265,7 @@ jobs:
             -a x86_64 \
             --after-install build/linux/postinst.sh \
             dist/bin/unified-hifi-linux-x64=/usr/bin/unified-hifi-control \
-            dist/public=/usr/share/unified-hifi-control/public \
+            dist/public/=/usr/share/unified-hifi-control/public \
             build/linux/unified-hifi-control.service=/etc/systemd/system/unified-hifi-control.service
 
       - name: Build deb package (arm64)
@@ -279,7 +279,7 @@ jobs:
             -a arm64 \
             --after-install build/linux/postinst.sh \
             dist/bin/unified-hifi-linux-arm64=/usr/bin/unified-hifi-control \
-            dist/public=/usr/share/unified-hifi-control/public \
+            dist/public/=/usr/share/unified-hifi-control/public \
             build/linux/unified-hifi-control.service=/etc/systemd/system/unified-hifi-control.service
 
       - name: Build deb package (armv7/armhf)
@@ -293,7 +293,7 @@ jobs:
             -a armhf \
             --after-install build/linux/postinst.sh \
             dist/bin/unified-hifi-linux-armv7=/usr/bin/unified-hifi-control \
-            dist/public=/usr/share/unified-hifi-control/public \
+            dist/public/=/usr/share/unified-hifi-control/public \
             build/linux/unified-hifi-control.service=/etc/systemd/system/unified-hifi-control.service
 
       - name: Upload Linux packages
